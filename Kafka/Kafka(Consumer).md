@@ -79,3 +79,51 @@ ___
 * 운영중에 Partition 개수를 변경하면 어떻게 될까? 순서 보장 불가.
 
 ![image](https://user-images.githubusercontent.com/60100532/198268414-ebacbe40-3e14-4250-9c50-69358cdd0f14.png)
+
+
+
+<br />    
+
+___
+### Cardinality
+* 특정 데이터 집합에서 유니크(Unique)한 값의 개수
+* Key Cardinality는 Consumer Group의 개별 Consumer가 수행하는 작업의 양에 영향
+* Key 선택이 잘 못되면 작업 부하가 고르지 않을 수 있음
+* Key는 Integer, String등과 같은 단순한 유형일 필요가 없음
+* Key는 Value와 마찬가지로 Avro, JSON등 여러 필드가 있는 복잡한 객체일 수 있음
+* 따라서, Partition 전체에 Record를 고르게 배포하는 Key를 만드는 것이 중요
+
+![image](https://user-images.githubusercontent.com/60100532/198306861-ef223066-e53a-47c6-93c7-da7e548da74b.png)
+
+
+
+
+<br />    
+
+___
+### Consumer Failure
+* 4개의 파티션이 있는 Topic를 Consume하는 4개의 Consumer가 하나의 Consumer Group에 있다면,   
+  각 Consumer는 정확히 하나의 Partition에서 Record를 consume함
+
+![image](https://user-images.githubusercontent.com/60100532/198308346-fccf7bf4-11a3-4f94-bbd0-2d3d5df1c7e2.png)
+
+### Consumer Rebalancing
+* Consumer Group내의 다른 Consumer가 실패한 COnsumer를 대신하여 Partition에서 데이터를 가져와서 처리함
+* Partition은 항상 Consumer Group내의 하나의 Consumer에 의해서만 사용됨
+* Consumer는 주어진 Topic에서 0개 이상의 많은 Partition을 사용할 수 있음
+
+![image](https://user-images.githubusercontent.com/60100532/198309023-fdd79654-e9eb-433f-8e9b-bec37841633d.png)
+
+
+<br />    
+
+___
+## Summery
+* Consumer가 자동이나 수동으로 데이터를 읽은 위치를 commit하여 다시 읽음을 방지
+* __consumer_offsets라는 Internal Topic에서 Consumer Offset을 저장하여 관리
+* 동일한 group.id로 구성된 모든 Consumer들은 하나의 Consumer Group을 형성
+* 다른 Consumer Group의 Consumer들은 분리되어 독립적으로 작동
+* 동일한 Key를 가진 메시지는 동일한 Partition에만 전달되어 Key레벨의 순서 보장 가능
+* Key 선택이 잘 못되면 작업 부하가 고르지 않을 수 있음
+* Consumer Group내의 다른 Consumer가 실패한 Consumer를 대신하여 Partition에서 데이터를 가져와 처리함.
+
