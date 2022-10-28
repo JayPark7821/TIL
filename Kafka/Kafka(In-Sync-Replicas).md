@@ -62,3 +62,68 @@ ___
 * Log End Offset : Producer가 메시지를 보내서 저장된, 로그의 맨 끝 Offset
 
 ![image](https://user-images.githubusercontent.com/60100532/198413476-b4b17e85-087d-400e-9ad0-f534eba65ede.png)
+
+___
+
+<br />  
+
+
+### Committed의 의미
+* ISR 목록의 모든 Replicas가 메시지를 받으면 "Commited"
+* `Consumer는 Committed 메시지만 읽을 수 있음`
+* Leader는 메시지를 Commit할 시기를 결정
+* Committed 메시지는 모든 Follower에서 동일한 Offset을 갖도록 보장
+* `즉, 어떤 Replica가 Leader인지에 관계없이 (장애 발생이라도) 모든 Consumer는 해당 Offset에서 같은 데이터를 볼 수 있음.`
+* Broker가 다시 시작할 때 Committed메시지 목록을 유지하도록 하기 위해, Broker의 모든 Partition에 대한 마지막 Committed Offset은 replication-offset-checkpoint라는 파일에 기록됨
+
+![image](https://user-images.githubusercontent.com/60100532/198442153-c4d250bf-84b2-4e33-a44f-d21115c1b0b1.png)
+
+___
+
+<br />  
+
+
+### Replicas 동기화
+* High Water Mark, Leader Epoch
+* High Water Mark
+  * 가장 최근에 Committed 메시지의 Offset 추적
+  * replication-offset-checkpoint 파일에 체크포인트를 기록
+* Leader Epoch
+  * 새 Leader가 선출된 시점을 Offset으로 표시
+  * Broker 복구 중에 메시지를 체크포인트로 자른 다음 현재 Leader를 따르기 위해 사용됨
+  * Controller가 새 Leader를 선택하면 Leader Epoch를 업데이트하고 해당 정보를 ISR목록의 모든 구성원에세 보냄
+  * leader-epoch-checkpoint 파일에 체크포인트를 기록
+
+___
+
+<br />  
+
+
+### Message Commit 과정
+* Follower에서 Leader로 Fetch만 수행
+
+> Offset 5까지 복제가 완료되어 있는 상황에서, Producer가 메시지를 보내면 Leader가 offset 6에 새 메시지를 추가.
+![image](https://user-images.githubusercontent.com/60100532/198497970-b3a3bd87-2384-4a4a-841d-882cfd8f962c.png)
+>
+___
+> 각 Follower들의 Fetcher Thread가 독립적으로 fetch를 수행하고, 가져온 메시지를 offset 6에 메시지를 Write
+![image](https://user-images.githubusercontent.com/60100532/198498220-f5f7a51b-ff61-4c93-b827-d2a7ffc2c54f.png)
+
+___
+> 각 Follower들의 Fetcher Thread가 독립적으로 다시 fetch를 수행하고 null을 받음 Leader는 High Water Mark 이동
+![image](https://user-images.githubusercontent.com/60100532/198498502-efeae28e-0ddb-4379-b104-44c6875c31dc.png)
+
+___
+> 각 Follower들의 Fetcher Thread가 독립적으로 다시 fetch를 수행하고 High Water Mark를 받음
+![image](https://user-images.githubusercontent.com/60100532/198498582-26c0455b-c9d3-4145-acc8-93d1bd96d08c.png)
+>
+
+<br />    
+
+___
+## Summery
+* In-Sync-Replicas(ISR)는 High Water Mark라고 하는 지점까지 동일한 Replicas(Leader와 Follower 모두)의 목록
+* High Water Mark(Committed) : ISR(Leader-Follower)간에 복제된 Offset
+* Consumer는 Committed 메시지만 읽을 수 있음
+* Kafka Cluster 내의 Broker중 하나가 Controller가 됨
+* Controller는 Zookeeper를 통해 Broker Liveness를 모니터링
