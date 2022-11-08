@@ -101,3 +101,16 @@ public enum RepeatStatus {
 |CONTINUABLE | * 처리를 계속할 수 있음 <br />  * SpringBatch에게 해당 Tasklet을 다시 실행하도록 정의|
 |FINISHED| * 처리가 완료 되었음 <br />   * 처리의 성공 여부에 관계없이 Tasklet의 처리를 완료하고 다음 처리 진행|
 
+
+## BeaenScope
+### @JobScope, @StepScope
+
+* spring Bean의 기본 Scope는 Singleton
+* Bean의 생성 시점을 지정된 Scope가 명시된 method가 실행되는 시점으로 지연  
+  `JobScope` job이 실행될 때 생성되고 끝날 때 삭제
+  `StepScope` step이 실행될 때 생성되고 끝날 때 삭제
+* Why?  
+  1. JobParameter를 method실행하는 시점까지 지연시켜 할당할 수 있다.
+  2. 동일한 Component를 병렬로 처리할 때 안전할 수 있다.
+  3. 
+    
