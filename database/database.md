@@ -65,3 +65,25 @@ ___
 ![image](https://user-images.githubusercontent.com/60100532/202878554-9a15c020-543b-44b3-9694-9c3c32d74d50.png)
 
 ![image](https://user-images.githubusercontent.com/60100532/202878614-7cac8cb4-2861-4a86-966b-4abac1567767.png)
+
+### 인덱스를 다룰 때 주의 해야할 점
+1. 인덱스 필드 가공
+   * 인덱스 필드를 가공하면 인덱스를 활용할 수 없다.
+    ```sql
+     -- AGE는 INT 타입
+    SELECT *
+    FROM member 
+    WHERE age * 10 = 100
+    WHERE age = '1'
+    ```
+2. 복합 인덱스
+   * 복합 인덱스의 선두 컬럼이 중요하다!! 먼저 선두 인덱스 컬럼을 탄다.
+3. 하나의 쿼리에는 하나의 인덱스만
+   * 하나의 쿼리에는 하나의 인덱스만 탄다. 여러 인덱스 테이블을 동시에 탐색하지 않음
+   * index merge hint를 사용하면 가능
+   * 따라서 WHERE, ORDER BY, GROUP BY 혼합해서 사용할 때에는 인덱스를 잘 고려해야함!!
+
+> 마지막으로 
+> * 의도대로 인덱스가 동작하지 않을 수 있음 (explain으로 확인)
+> * 인덱스도 비용이다. 쓰기를 희생하고 조회를 얻는 것
+> * 꼭 인덱스로만 해결할 수 있는 문제인가?
