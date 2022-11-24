@@ -129,3 +129,45 @@ from 회원 inner join 커버링 on 회원.id = 커버링.id
 ```
 
 * order by, offset, limit 절로 인한 불필요한 데이터블록 접근을 커버링 인덱스를 통해 최소화 할 수 있다.
+
+
+### 트랜잭션 ACID 
+* 원자성(Atomicity) : 트랜잭션과 관련된 작업들이 부분적으로 실행되다가 중단되지 않는 것을 보장하는 능력
+* 일관성(Consistency) : 트랜잭션이 실행을 성공적으로 완료하면 언제나 일관성 있는 데이터베이스 상태로 유지하는 것을 의미한다.
+* 독립성(Isolation) : 트랜잭션을 수행 시 다른 트랜잭션의 연산 작업이 끼어들지 못하도록 보장하는 것을 의미한다.
+* 지속성(Durability) : 성공적으로 수행된 트랜잭션은 영원히 반영되어야 함을 의미한다.   
+
+#### 원자성(Atomicity)
+* ALL or Nothing ( 무조건 성공 or 무조건 실패)
+* MySql에서 어떻게 원자성을 보장하나 -> MVCC를 통해 보장
+
+![image](https://user-images.githubusercontent.com/60100532/203794129-d01325f5-0834-4d6e-ba0e-2d8e8fa431ba.png)
+
+![image](https://user-images.githubusercontent.com/60100532/203794200-89d09295-9064-43fa-aa78-ac65142c3ee9.png)
+* undoLog에 원본 데이터 저장.  
+
+### 트랜잭션 실패시
+![image](https://user-images.githubusercontent.com/60100532/203794363-c540d03f-8806-4d1b-b5c3-94a55dc2f169.png)
+* 트랜잭션 실패시 undoLog의 데이터로 원복
+
+### 커밋시
+![image](https://user-images.githubusercontent.com/60100532/203794710-aebc15e8-c725-483f-91ee-4c76707da37c.png)
+* 김국밥의 잔액은 1400으로 반영됨
+* 커밋이 완료되어도 undoLog의 데이터는 바로 삭제하지 않는다.
+* 김국밥의 잔액을 +900하는 트랜잭션보다 먼저 시작했지만 아직 끝나지 않아 undoLog의 데이터를 바라봐야 하는 트랜잭션이 있을 수 있다
+
+> 트랜잭션이 Atomicity한 단위가 된다!
+> 
+
+#### 일관성(Consistency)
+* 트랜잭션이 종료되었을 때 데이터 무결성이 보장된다.
+* 제약조건을 통해 일관성을 보장해준다.(유니크 제약, 외래키 제약 등.)
+
+#### 독립성(Isolation)
+* 트랜잭션은 서로 간섭하지 않고 독립적으로 동작한다. 
+* 하지만 많은 성능을 포기해야 하므로 개발자가 제어가 가능 (트랜잭션 격리레벨을 통하여 via MVCC)
+
+#### 지속성(Durability) 
+* 완료된 트랜잭션을 유실되지 않는다.
+* WAL을 통해!! 
+
