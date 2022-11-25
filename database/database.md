@@ -171,3 +171,58 @@ from 회원 inner join 커버링 on 회원.id = 커버링.id
 * 완료된 트랜잭션을 유실되지 않는다.
 * WAL을 통해!! 
 
+ 
+### 트랜잭션 격리 레벨
+* ISOLATION - 트랜잭션은 서로 간섭하지 않고 독립적으로 동작한다. 
+* 격리 레벨 (innoDB)
+  * READ UNCOMMITTED
+  * READ COMMITTED
+  * REPEATABLE READ
+  * SERIALIZABLE READ
+
+### * Dirty Read 커밋되지 않은 데이터를 읽은 경우
+> ![image](https://user-images.githubusercontent.com/60100532/203985931-a1e793ec-da2a-43d8-9727-511f1eff86cb.png)  
+> 
+> ___
+> ![image](https://user-images.githubusercontent.com/60100532/203986005-4665272b-8e73-4eb3-af6c-52d837715a4f.png)  
+> 
+> ___
+> ![image](https://user-images.githubusercontent.com/60100532/203986123-d182e6e9-b36f-4287-afe6-e272b95ae49a.png)  
+> 
+> ---
+> TX1의 update가 rollback되기 전에 TX2에서 김국밥의 잔액 1400원을 읽어옴 (커밋되지 않은 데이터를 읽어옴 (dirty read))
+> ![image](https://user-images.githubusercontent.com/60100532/203986173-f5b3f9de-aca4-4c59-96c9-746b5450ff4f.png)
+___  
+<br />  
+
+### * Non Repeatable Read 같은 트랜잭션에서 같은 데이터를 조회했지만 결과가 달라지는 경우
+> ![image](https://user-images.githubusercontent.com/60100532/203986401-6caa3218-1af1-4ccd-bd97-05a624e41ffe.png)  
+> 
+> ---
+> ![image](https://user-images.githubusercontent.com/60100532/203986593-f7df3afb-1740-4dcd-9515-883f3e92b095.png)  
+> 
+> ---
+> ![image](https://user-images.githubusercontent.com/60100532/203986803-470b9317-4057-4271-825d-f5683386a8f8.png)
+> 
+> ---
+>  TX1의 트랜잭션이 끝나기전 같은 트랜잭션에서 같은 홍길동의 잔액을 조회했지만 그 결과가 달라졌다.
+> ![image](https://user-images.githubusercontent.com/60100532/203986874-36983792-0e87-4662-abe3-3d4157a2c3d5.png)
+___    
+<br />    
+
+### * Phantom READ 같은 트랜잭션에서 같은 조건으로 데이터를 조회했지만 결과가 달라지는 경우
+>![image](https://user-images.githubusercontent.com/60100532/203987148-3e188e34-aec5-417f-a0de-2010e489b85a.png)   
+> 
+> ---
+> ![image](https://user-images.githubusercontent.com/60100532/203987183-c9b667b9-b35a-4ea1-83d3-7f7438ee329f.png)  
+> 
+> ---
+> TX1의 트랜잭션이 끝나기전에 같은 조건으로 데이터를 조회했지만 결과과 달라짐
+>  ![image](https://user-images.githubusercontent.com/60100532/203987251-b7acb3be-6c2d-44b0-ad39-b6d4f35faaa3.png)
+> 
+
+  
+<br />  
+
+![image](https://user-images.githubusercontent.com/60100532/203985016-cc5a749e-15b8-4fc1-87b0-a309dee08abc.png)
+
