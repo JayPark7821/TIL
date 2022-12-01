@@ -101,3 +101,15 @@
 |DECR| 특정 키의 값을 Integer로 취급하여 1 감소시킨다.| DECR mycount                |
 |MSET| 여러 키에 대한 값을 한번에 저장한다.| MSET mine milk yours coffee |
 |MGET| 여러 키에 대한 값을 한번에 얻어온다. | MGET mine yours|
+
+* #### List 요약
+  * Linked-list 형태의 자료구조(인덱스 접근은 느리지만 데이터 추가/삭제가 빠름)
+  * Queue와 Stack으로 사용할 수 있음
+* #### List 주요 명령어
+| 명령어    | 기능                             | 예제                  |
+|--------|--------------------------------|---------------------|
+| LPUSH  | 리스트의 왼쪽(head)에 새로운 값을 추가한다.    | LPUSH mylist apple  |
+| RPUSH  | 리스트의 오른쪽(tail)에 새로운 값을 추가한다.   | RPUSH mylist banana |
+| LLEN   | 리스트에 들어있는 아이템 개수를 반환한다.        | LLEN mylist         |
+| LRANGE | 리스트의 왼쪽(head)에서 값을 삭제하고 반환한다.  | LPOP mylist 0 -1    |
+| RPOP   | 리스트의 오른쪽(tail)에서 값을 삭제하고 반환한다. | RPOP mylist         |
