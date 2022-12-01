@@ -113,3 +113,16 @@
 | LLEN   | 리스트에 들어있는 아이템 개수를 반환한다.        | LLEN mylist         |
 | LRANGE | 리스트의 왼쪽(head)에서 값을 삭제하고 반환한다.  | LPOP mylist 0 -1    |
 | RPOP   | 리스트의 오른쪽(tail)에서 값을 삭제하고 반환한다. | RPOP mylist         |
+
+* #### Set 요약
+  * 순서가 없는 유니크한 값의 집합
+  * 검색이 빠름
+  * 개별 접근을 위한 인덱스가 존재하지 않고, 집합 연산이 가능(교집합, 합집합 등)
+* #### Set 주요 명령어
+| 명령어       | 기능                         | 예제                    |
+|-----------|----------------------------|-----------------------|
+| SADD      | Set에 데이터를 추가한다.            | SADD myset apple      |
+| SREM      | Set에서 데이터를 삭제한다.           | SREM myset apple      |
+| SCARD     | Set에 저장된 아이템 개수를 반환한다.     | SCARD myset           |
+| SMEMBERS  | Set에 저장된 아이템들을 반환한다.       | SMEMBERS myset        |
+| SISMEMBER | 특정 값이 Set에 포함되어 있는지를 반환한다. | SISMEMBER myset apple |
