@@ -85,3 +85,19 @@
   * 다양한 자료구조를 지원한다는 점에서 차별화됨
   * 원하는 수준의 영속성을 구성할 수 있음
   * In-memory 솔루션이라는 점에서 오는 특징을 활용할 떄 가장 효율적
+
+### 6. Redis Data Type의 이해
+* #### Strings 요약
+  * 가장 기본적인 데이터 타입으로 제일 많이 사용됨
+  * 바이트 배열을 저장(binary-safe)
+  * 바이너리로 변환할 수 있는 모든 데이터를 저장 가능(JPG와 같은 파일 등)
+  * 최대 크기는 512MB
+* #### Strings 주요 명령어
+|명령어|기능| 예제                          |
+|----|----|-----------------------------|
+|SET| 특정 키에 문자열 값을 저장한다.| SET say hello               |
+|GET| 특정 키의 문자열 값을 얻어온다.| GET say                     |
+|INCR| 특정 키의 값을 Integer로 취급하여 1 증가시킨다.| INCR mycount                |
+|DECR| 특정 키의 값을 Integer로 취급하여 1 감소시킨다.| DECR mycount                |
+|MSET| 여러 키에 대한 값을 한번에 저장한다.| MSET mine milk yours coffee |
+|MGET| 여러 키에 대한 값을 한번에 얻어온다. | MGET mine yours|
