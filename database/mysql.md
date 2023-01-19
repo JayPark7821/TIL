@@ -49,3 +49,25 @@ ___
 * Mysql  스토리지 엔진은 플러그인 형태로 Handler API만 맞춘다면 직접 구현해서 사용할 수 있다.
 * InnoDB, Mylsam등 여러개의 스토리지 엔진이 존재
 * 8.0대 부터는 InnoDB엔진이 디폴트
+
+
+
+## 쓰기락과 읽기락
+* 락을 통해 동시성을 제어할 때는, 락의 범위를 최소화 하는 것이 중요.
+* MySql에서는 트랜잭션의 커밋 혹은 롤백시점에 잠금이 풀린다. -> 트랜잭션이 곧 락의 범위 
+* MySql에서는 쓰기락, 읽기락 두가지 락을 제공
+
+|                     | 읽기락(Shared Lock) | 쓰기락(Exclusive Lock) |
+|---------------------|------------------|---------------------|
+| 읽기락(Shared Lock)    | O                | 대기                  |
+| 쓰기락(Exclusive Lock) | 대기               | 대기                  |
+
+* 읽기락은 SELECT ... FOR SHARE
+* 쓰기락은 SELECT ... FOR UPDATE 또는 UPDATE, DELETE 쿼리
+* 를 통해 획득 할 수 있다.
+
+* 매번 잠금이 발생할 경우, 성능저하를 피할 수 없음   
+-> MySql에서 일반 SELECT는(FOR SHARE나 FOR UPDATE가 없는) nonblocking consistent read로 동작(대기 없는 read)
+* 이것이 가능한 이유는 undo log를 통해서 원본데이터를 변경했을때 커밋되기전 데이터를 관리하고 있기 때문
+* MySql에서 record lock은 row가 아니라 index를 lock한다.  
+-> 인덱스가 없는 조건으로 Locking Read시 불필요한 데이터들이 잠길 수 있음.
