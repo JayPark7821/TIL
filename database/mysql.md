@@ -84,3 +84,70 @@ ___
 ![image](https://user-images.githubusercontent.com/60100532/213745980-2d1d522b-2e5e-4433-9356-2bb480dcb63a.png)
 
 * 실패에 대한 처리를 직접 구현해야 함
+
+### 좋아요 구현
+* 게시물에 컬럼 추가를 통한 구현 - 비관적 락
+  1. 조회시 컬럼만 읽어 오면 됨
+  2. 쓰기시 게시물 레코드에 대한 경합이 발생 -> 하나의 자원(게시물)을 두고 락 대기
+  3. 같은 회원이 하나에 게시물에 대해 여러 번 좋아요를 누를 수 있음
+
+```java
+public Optional<Post> findById(Long id, Boolean requireLock) {
+		String sql = String.format("""
+				SELECT * 
+				FROM %s
+				WHERE id = :postId
+			""", TABLE);
+		if(requireLock)
+			sql += " FOR UPDATE";
+		
+		MapSqlParameterSource params = new MapSqlParameterSource().addValue("postId", id);
+		return Optional.of(namedParameterJdbcTemplate.queryForObject(sql, params, ROW_MAPPER));
+	}
+```
+
+* 좋아요 테이블을 통한 구현
+  1. 조회시 매번 count쿼리 연산
+  2. 쓰기시 경합 없이 인서트만 발생
+  3. 회원정보등 다양한 정보 저장 가능
+
+```java
+	public Page<PostDto> getPosts(Long memberId, Pageable pageable) {
+		return postRepository.findAllByMemberId(memberId, pageable)
+			.map(this::toDto);
+
+	}
+
+	private PostDto toDto(Post post) {
+		return new PostDto(
+			post.getId(),
+			post.getContents(),
+			post.getCreatedAt(),
+			postLikeRepository.getCount(post.getId())
+		);
+	}
+```
+```java
+	public Long getCount(Long postId) {
+		String sql = String.format("""
+			select count(id)
+			from %s
+			WHERE postId = :postId
+			""", TABLE);
+		MapSqlParameterSource param = new MapSqlParameterSource()
+			.addValue("postId", postId);
+		return namedParameterJdbcTemplate.queryForObject(sql, param, Long.class);
+	}
+
+```
+    
+### 병목 해소하기
+* 쓰기 지점의 병목은 하나의 레코드를 점유
+* 조회 지점의 병목은 카운트 쿼리   
+
+-> 좋아요 수는 높은 정합성을 요구하는 데이터인가????
+
+![image](https://user-images.githubusercontent.com/60100532/213925990-af2e3e7a-77b1-4b21-8df8-0f275d1f85a0.png)
+
+* 결국 데이터의 성질, 병목지점등을 파악하고, 적당한 기술들을 도입해 해소 해야한다.
+* 
