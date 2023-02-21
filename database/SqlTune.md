@@ -250,3 +250,192 @@ WHERE 조건
 * sql문을 어떻게 수행할 것인지에 관한 추가 정보를 보여주는 항목
 
 
+
+
+# Sql Tuning
+## 실무적인 SQL 튜닝 절차 이해하기
+* SQL 문의 구성요소는 크게 두 가지로 구분할 수 있다.
+* 가시적으로는 테이블 현황, 조건절, 그루핑 열, 정렬되는 열, select 절의 열 등이 있고,
+* 비 가시적으로는 실행 계획, 인덱스 현황, 조건절 열들의 데이터 분포, 데이터의 적재 속도, 업무 특성등이 있다.
+
+1. sql문 실행결과 & 현황 파악
+    * 결과 및 소요시간 확인.
+    * 조인/서브쿼리 구조
+    * 동등/범위 조건
+2. 가시적, 비 가시적 요소 파악
+    * 가시적 : 테이블의 데이터 건수, select절 컬럼 분석, 조건절 컬럼 분석, 그루핑/정렬 컬럼
+    * 비가시적 : 실행 계획, 인덱스 현황, 데이터 변경 추이, 업무적 특징.
+3. 튜닝 방향 판단 & 개선/적용
+
+
+### 기본 키를 변형하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220267490-76b226ec-b48a-49fb-ba37-69a210a8e8e1.png)
+* | 튜닝 전 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220267753-a009dede-c1b2-4d3a-898d-93cc28ed9019.png)
+
+#### 튜닝 수행
+* | 데이터 확인 |
+  ![image](https://user-images.githubusercontent.com/60100532/220268027-48959575-be69-4508-b370-46bc1139244c.png)
+* | index 확인 |
+  ![image](https://user-images.githubusercontent.com/60100532/220268355-3c391226-6abe-4886-8b22-a9b20994b516.png)
+
+* 튜닝 전 sql 문에서는 사원번호 열(기본키)을 where절 조건으로 작성했지만   
+  substring(사원번호,1,4)와 length(사원번호)와 같이 가공하여 사용했으므로
+* 기본키를 사용하지 못하고 테이블 풀 스캔(Type ALL)을 수행하게 됨
+* 따라서 가공된 사원번호 열을 변경하여 기본 키를 사용할 수 있도록 튜닝.
+
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+    * 기존 가공되어 사용되던 사원번호(기본키)를 변형없이 사용하도록 변경
+    * ![image](https://user-images.githubusercontent.com/60100532/220269424-2b70dc32-d10b-4de2-9990-461a7f5af502.png)
+* | 튜닝 후 실행 계획 |
+    * ![image](https://user-images.githubusercontent.com/60100532/220269793-131e9adb-4928-4936-9b68-02224415e062.png)
+    * where 절의 between 구문에 의해 기본키 (key : primary)의 특정 범위 스캔(type : range)
+    * 출력할 사원번호가 10개 이므로 rows항목에서도 10이라는 값을 출력
+
+
+---
+
+### 사용하지 않는 함수를 포함하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220271368-8629b97f-1fba-48a5-b030-3c0b489f7623.png)
+* | 튜닝 전 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220271773-b1052128-7b65-4213-89e1-1823dd85237b.png)
+* key 항목이 I_성별_성 , type 항목이 index
+* 즉 I_성별_성 인덱스를 활용해 인덱스 풀스캔 수행
+* 또한 extra에 Using temporary, Using filesort가 표시되어 있음 -> 임시 테이블 생성 및 정렬 수행.
+
+#### 튜닝 수행
+* 성별 컬럼은 not null
+  ![image](https://user-images.githubusercontent.com/60100532/220273581-3965b108-947d-45d0-b97c-ca225371467b.png)
+* 따라서 ifnull() 함수를 처리하려고 DB 내부적으로 별도의 임시 테이블을 만들어서 null값 예외처리를 필요 없음.
+
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+    * ifnull() 함수를 제거하고 성별 열만 그대로 사용하여 튜닝한 쿼리.
+    * ![image](https://user-images.githubusercontent.com/60100532/220273991-ca0c3b87-3e4c-4c45-8d62-9f2dabd9d2e1.png)
+* | 튜닝 후 실행 계획 |
+    * ![image](https://user-images.githubusercontent.com/60100532/220275374-df16838c-37a7-4b1c-985b-966f9648c4da.png)
+    * key 항목이 I_성별_성 , type 항목이 index
+    * 즉 I_성별_성 인덱스를 활용해 인덱스 풀스캔 수행.
+    * extra 항목에 Using index가 표시되어 있음 -> 인덱스 풀 스캔 수행. (기존 임시 테이블 없이)
+
+---
+
+### 형변환으로 인덱스를 활용하지 못하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220276171-0dc92fb9-e621-4d92-9be3-ad308ba356ae.png)
+* | 튜닝 전 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220278858-aa7a6e96-108d-492d-9a22-5b6f49b9a0f8.png)
+    * key 항목 I_사용여부, type 항목 index
+    * I_사용여부 인덱스를 활용해 인덱스 풀스캔 수행
+    * rows 항목 449385 즉 스토리지 엔진에서 449385건을 읽어와 42842으로 필터링해 출력함.
+    * 스토리지 엔진에서 불필요한 I/O 발생.
+
+
+#### 튜닝 수행
+* 데이터 확인
+  ![image](https://user-images.githubusercontent.com/60100532/220285934-e841dd65-db5b-4ff1-a3b4-7580f72f697f.png)
+* 사용여부 컬럼 값이 1인 데이터는 전체 데이터 대비 2% 미만.
+  ![image](https://user-images.githubusercontent.com/60100532/220286646-1b6d3983-b2ca-47f4-8f68-854616c94dec.png)
+* 사용여부 열 type은 문자형인 char(1) 즉 where 사원번호 = 1과 같이 숫자 유형으로 데이터에 접근해
+* 내부적으로 형변환이 발생 -> 그결과 I_사용여부 인덱스를 제대로 활용하지 못함.
+
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220287068-88018c18-56d4-4520-84b5-c2d6818640ca.png)
+* | 튜닝 후 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220287350-c0229f99-4910-4050-9d9b-631686977f75.png)
+    * 스토리지 엔진에서 가져온 데이터 건수가 85682건으로 줄어듬. 스토리지 엔진 I/O감소
+
+---
+
+### 열을 결합하여 사용하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220290622-5734d970-5386-4891-8204-eca5257119e6.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220290731-efaf7bd7-947d-4b9a-bc94-d6237cc7626c.png)
+* | 튜닝 전 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220290883-dcbf720d-8683-473b-86df-68535ee16f63.png)
+    * type 항목 ALL
+    * 테이블 풀스캔
+    * rows 항목 298980 즉 스토리지 엔진에서 298980건을 읽어와 102건 으로 필터링해 출력함.
+
+
+#### 튜닝 수행
+* 데이터 확인
+  ![image](https://user-images.githubusercontent.com/60100532/220291468-e02b7213-688c-45ea-b64b-2aed9062ee2e.png)
+* 인덱스 확인
+  ![image](https://user-images.githubusercontent.com/60100532/220292061-15e157cf-6f29-46f1-9963-8cc3c7b6075d.png)
+    * 성별 열과 성 열로 구성된 I_성별_성 인덱스 사용가능.
+    * 조건문도 동등 조건(=)이므로 인덱스를 활용하여 빠르게 조회 가능.
+
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220292766-4ba99490-e689-4972-bafb-1e8d4a0fcc1b.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220292845-8b8172f6-9393-4755-a361-6b461c845592.png)
+* | 튜닝 후 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220293012-70ef8a35-f7c4-4671-9ef7-f31660cbac74.png)
+    * key 항목 I_성별_성 인덱스 사용
+    * rows 항목 튜닝 전 298980건에서 102건으로 줄어듬. 데이터 엑세스 범위 줄어듬.
+---
+
+### 습관적으로 중복을 제거하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220299598-342ae95d-8f33-445f-bd2c-51ff358f3416.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220299703-ce9428d2-6618-4a1e-b550-12d92b4cf73c.png)
+
+* | 튜닝 전 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220299839-8cdc66ad-af09-47af-b344-0cff233a4a58.png)
+    * 드라이빙 테이블인 부서관리자 테이블과 드리븐 테이블인 사원 테이블의 id값이 1로 동일함 -> 서로 조인
+    * 드라이빙 테이블 부서관리자 테이블의 type 항목 index -> 인덱스 풀스캔
+    * 드리븐 테이블 사원 테이블의 type 항목 eq_ref ->  사원번호를 사용해 1건의 데이터를 조회하는 방식으로 조인
+    * extra 항목에 Using temporary -별도 임시 테이블 만들고 있음. -> 튜닝 대상
+#### 튜닝 수행
+* 사원 테이블의 기본 키는 사원번호. -> 사원.사원번호에는 중복된 데이터 없음.
+* distinct 키워드 사용할 필요 고민....
+> distinct는 나열된 열들을 정렬한 뒤 중복된 데이터는 삭제함.
+> distinct를 쿼리에 작성하는 것만으로도 정렬 작업이 포함됨.
+
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220302240-ce7ee7e8-26e0-4c08-8f4f-32394273d9e2.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220302286-f905e1dc-fb37-41d9-92aa-8e59ca5f3151.png)
+    * 필요없는 distinct 키워드 제거
+* | 튜닝 후 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220302591-2752bacf-5ad2-4842-98fc-0b60c2f21418.png)
+    * extra 항목의 Using temporary 제거됨
+---
+
+
+### 다수 쿼리를 UNION 연산자로만 합치는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220304194-0232565e-cc49-4096-a204-c4895d99ac12.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220304233-c8d7436c-da36-40a0-bb6c-f3617ae7490f.png)
+* | 튜닝 전 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220304354-77b3f0d9-9a7b-41ff-b448-b5d14d0e6779.png)
+#### 튜닝 수행
+* 두 개의 select 문이 UNION 연산자로 통합되는 과정에서 각 select 문의 결과를 합친 뒤 중복을 제거하고 그 결과를 출력함.
+* 이미 사원번호라는 기본 키가 출력되는 sql문에서 이처럼 중복 제거가 필요한지 고민해야 함.
+
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ![image](https://user-images.githubusercontent.com/60100532/220309605-089a0631-1df1-4a33-ad47-4f257be92d4c.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220309676-385004fd-6411-4d7c-83ce-a26916e164c7.png)
+    * union -> union all 변경
+
+* | 튜닝 후 실행 계획 |
+  ![image](https://user-images.githubusercontent.com/60100532/220309852-b1f59539-99b8-440a-8214-6fb50a5f2c02.png)
+    * 이전 실행 계획과 달리 id가 1,2의 결과를 단순히 합칠 뿐이므로 세 번째 추가 행은 필요하지 않음.
+    * 즉 정렬하여 중복을 제거하는 작업이 제외되면서 불필요한 리소스 낭비 방지.
+
+> UNION ALL 과 UNION의 차이
+> * UNION ALL은 여러 개의 SELECT 문을 실행하는 결과를 단수히 합치는 것에 그치지만,   
+    > UNION은 여러개의 SELECT 문의 실행 결과를 합친 뒤 중복된 데이터를 제거하는 작업까지 포함함.
+---
