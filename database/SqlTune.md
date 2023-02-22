@@ -730,3 +730,164 @@ and (select max(연봉)
   ![image](https://user-images.githubusercontent.com/60100532/220524738-c1b57427-f60d-4e09-b1a8-678ccc7ead30.png)
   * 사원출입기록 테이블은 exists 연산자로 데이터 존재 여부를 파악하기 위해 임시 테이블을 생성하는 MATERIALIZED 로 select type이 표기됨.
 ---   
+
+## SQL문 재작성으로 착한 쿼리 만들기
+### 처음부터 모든 데이터를 가져오는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT 사원.사원번호,
+       급여.평균연봉,
+       급여.최고연봉,
+       급여.최저연봉
+  FROM 사원,
+       (SELECT 사원번호,
+               ROUND(AVG(연봉),0) 평균연봉,
+               ROUND(MAX(연봉),0) 최고연봉,
+               ROUND(MIN(연봉),0) 최저연봉
+        FROM 급여
+        GROUP BY 사원번호
+        ) 급여
+  WHERE 사원.사원번호 = 급여.사원번호
+  AND 사원.사원번호 BETWEEN 10001 AND 10100;
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220526412-3d433683-1004-4d80-9adc-459393878038.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220526534-fb277d58-ec77-49a8-ae3b-06af4bf26c05.png)
+  * 중첩 루프 조인을 하는 두 개 테이블 ( 사원, derived2) 먼저 출력된 사원 테이블이 드라이빙 테이블,
+  * 나중에 출력된 derived2 테이블이 드리븐 테이블
+  * derived2 테이블은 id가 2이고 select_type 항목이 DERIVED로 표시됨. from 절에서 급여 테이블로 수행한 결과를 메모리나 디스크에 올려놓음
+  * 이후 where 절의 조건에 따라 데이터 추출
+#### 튜닝 수행
+* Extra 항목 Using temporary, Using filesort
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  SELECT 사원.사원번호,
+         (SELECT ROUND(AVG(연봉), 0)
+          FROM 급여
+          WHERE 사원.사원번호 = 급여.사원번호) 평균연봉,
+         (SELECT ROUND(MAX(연봉), 0)
+          FROM 급여
+          WHERE 사원.사원번호 = 급여.사원번호) 최고연봉,
+         (SELECT ROUND(MIN(연봉), 0)
+          FROM 급여
+          WHERE 사원.사원번호 = 급여.사원번호) 최저연봉
+  FROM 사원
+  WHERE 사원.사원번호 BETWEEN 10001 AND 10100;
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220532165-70355e69-f336-44d1-b741-83147da8c5cd.png)
+  * 전체 사원 데이터가 아닌 사원 테이블에서 WHERE절 조건으로 100건의 데이터만 가져옴.
+  * SELECT 절에서 급여 테이블에 3번이나 접근하므로 혹시 비효율적인 방식은 아닌지 의문이 들 수 있다.
+  * 하지만 추출하려는 사원 테이블의 데이터가 100건(극히 소량 약 0.0003%)에 불과 하므로, 인덱스를 활용해 수행하는 스칼라 서브 쿼리는 많은 리소스를 소모하지 않는다.
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220532052-f21cc4b6-8864-4a5e-9c61-870122c16f08.png)
+  * select_type 항목이 DEPENDENT SUBQUERY로 표시됨. 이는 호출을 반복해 일으키므로 지나치게 자주 반복 호출될 경우 성능 저하를 일으킬 수 있다.
+  * 하지만 위 예시와 같이 100건의 데이터가 추출되는 경우라면, 성능 측면에서 비효율적인 부분은 거의 없다고 볼 수 있다.
+---
+
+### 비효율적인 페이징을 수행하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT 사원.사원번호,
+       사원.이름,
+       사원.성,
+       사원.입사일자
+  FROM 사원,
+       급여
+  WHERE 사원.사원번호 = 급여.사원번호
+  AND 사원.사원번호 BETWEEN 10001 AND 50000
+  GROUP BY 사원.사원번호
+  ORDER BY SUM(급여.연봉) DESC
+  LIMIT 150,10;
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220534941-a17d74e2-70c5-4769-9495-b5d2a8305065.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220535010-ee9f103a-5210-454b-bc9e-5ba91ba52a09.png)
+  * 드라이빙 테이블인 사원 테이블을 그룹핑하고 정렬하는 과정에서 임시테이블(extra 항목 Using temporary, Using filesort)을 생성
+#### 튜닝 수행
+* LIMIT 연산으로 10건의 데이터를 가져오기 위해 수십만 건의 데이터 대상으로 조인을 수행한 뒤 그룹핑과 정렬 연산을 수행하는 것은 과연 효율적인 방식일까?
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  SELECT STRAIGHT_JOIN 사원.사원번호,
+       사원.이름,
+       사원.성,
+       사원.입사일자
+  FROM (SELECT 사원번호
+        FROM 급여
+        WHERE 사원번호 BETWEEN 10001 AND 50000
+        GROUP BY 사원번호
+        ORDER BY SUM(급여.연봉) DESC
+        LIMIT 150,10) 급여,
+      사원
+  WHERE 사원.사원번호 = 급여.사원번호;
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220541260-d849ad22-ceee-450b-b6ce-138b3811540d.png)
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220541482-570be2ce-7da9-41ef-acc1-564b2a8f447f.png)
+  * id가 1인 derived2 테이블과 사원 테이블 대상으로 중첩 루프 조인 수행.
+  * derived2 테이블은  id가 2에 해당되는 급여 테이블
+  * derived2 테이블은 where 절의 조건으로 type 항목이 range이고 가져온 데이터를 임시 테이블에 올려 정렬 작업 수행( extra 항목 Using temporary, Using filesort)
+  * 인라인 뷰인 급여 테이블(derived2) 테이블 기준으로 사원 테이블에 반복해 접근
+  * 드라이빙 테이블은 type이 ALL이고 (풀 스캔)
+  * 드리븐 테이블은 pk를 활용하여 데이터 추출(type 항목 eq_ref)
+---
+
+
+### 필요 이상으로 많은 정보를 가져오는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT COUNT(사원번호) AS 카운트
+  FROM (SELECT 사원.사원번호, 부서관리자.부서번호
+        FROM (SELECT *
+              FROM 사원
+              WHERE 성별 = 'M'
+              AND 사원번호 > 300000
+              ) 사원
+        LEFT JOIN 부서관리자 ON 사원.사원번호 = 부서관리자.사원번호
+        ) 서브쿼리;
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220549047-e71b885c-aace-435b-90af-88158a9899e0.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220549176-543ddb0a-94f5-4f10-976e-b17794671666.png)
+#### 튜닝 수행
+* 부서관리자 테이블과 외부 조인하는 사원.사원번호 = 관리자.사원번호 조건이 꼭 필요한 내용일지 고민 필요
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  SELECT COUNT(사원번호) AS 카운트
+  FROM 사원 FORCE INDEX(PRIMARY)
+  WHERE 성별 = 'M'
+    AND 사원번호 > 300000
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220552462-8b36152d-4bdd-49b7-b964-53f484c52a27.png)
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220552640-080d6ab2-ff85-496a-927e-1992db40132e.png)
+---
+
+
+### 대량의 데이터를 가져와 조인하는 sql문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT STRAIGHT JOIN DISTINCT 매핑.부서번호
+  FROM 부서관리자 관리자,
+       부서사원_매핑 매핑
+  WHERE 관리자.부서번호 = 매핑.부서번호
+  ORDER BY 매핑.부서번호;
+  ```  
+  ![image](https://user-images.githubusercontent.com/60100532/220553357-71087003-b43a-4073-83dc-acfad0d9de66.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220553462-ff0514c4-ae89-4385-8f9a-3b885a305e21.png)
+#### 튜닝 수행
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  ```  
+* | 튜닝 후 실행 계획 |
+---
+
+
