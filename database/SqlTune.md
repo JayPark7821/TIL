@@ -873,21 +873,151 @@ and (select max(연봉)
 #### 현황 분석
 * | 튜닝 전 SQL 문 |
   ```sql
-  SELECT STRAIGHT JOIN DISTINCT 매핑.부서번호
-  FROM 부서관리자 관리자,
-       부서사원_매핑 매핑
+  SELECT STRAIGHT_JOIN  DISTINCT 매핑.부서번호
+  FROM 부서사원_매핑 매핑 ,
+  부서관리자 관리자
+       
   WHERE 관리자.부서번호 = 매핑.부서번호
   ORDER BY 매핑.부서번호;
   ```  
   ![image](https://user-images.githubusercontent.com/60100532/220553357-71087003-b43a-4073-83dc-acfad0d9de66.png)
 * | 튜닝 전 실행 계획 |  
-  ![image](https://user-images.githubusercontent.com/60100532/220553462-ff0514c4-ae89-4385-8f9a-3b885a305e21.png)
+  ![image](https://user-images.githubusercontent.com/60100532/220830898-88bef23a-b882-4b4a-bc88-3ae3249dcdca.png)
+  * 드라이빙 테이블 부서사원_매핑 테이블에 데이터 접근을 구체화 할 조건이 없음 -> 인덱스 풀스캔(TYPE 항목 : index)
+  * 드리븐 테이블 부서관리자 테이블은 매핑.부서번호로 접근 & distinct연산 수행.
 #### 튜닝 수행
+* 결론적으로 조회하고 싶은 데이터는 중복이 제거된 부서번호임.
+* 부서관리자 테이블과 부서사원_매핑 테이블 모두에 부서번호 컬럼이 있음.
+* 둘 중 하나의 테이블은 단순하게 부서번호가 있는지만 판단하면 ??
+* 또 조인을 수행한 뒤 그 결과에서 distinct 작업을 수행함.-> 조인하기 전에 미리 중복 제거 가능하지 않을까??
 #### 튜닝 결과
 * | 튜닝 후 SQL 문 |
   ```sql
-  ```  
-* | 튜닝 후 실행 계획 |
+  SELECT 매핑.부서번호
+  FROM (SELECT DISTINCT 부서번호
+        FROM 부서사원_매핑 매핑) 매핑
+  WHERE EXISTS(SELECT 1
+               FROM 부서관리자 관리자
+               WHERE 부서번호 = 매핑.부서번호)
+  ORDER BY 매핑.부서번호;
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/220832140-ab145248-5fbf-41c4-8ecd-803b027f061e.png)
+  * EXISTS연산을 사용해 부서관리자 테이블의 데이터를 모두 확인하지 않고 동일한 부서번호가 있다면 이후 데이터를 확인하지 않고 바로 조회를 종료
+  * 중복 제거를 미리 수행하고 SELECT 절에서 활용하지 않는 부서관리자 데이터는 존재 여부만 판단하도록 수정.
+* | 튜닝 후 실행 계획 |   
+  ![image](https://user-images.githubusercontent.com/60100532/220833081-7c47da59-9ea1-4dc0-bd73-8d032e7697c1.png)
 ---
 
 
+
+## 인덱스 조정으로 착한 쿼리 만들기
+### 인덱스 없이 작은 규모의 데이터를 조회하는 SQL문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT *
+  FROM 사원
+  WHERE 이름 = 'Georgi'
+  AND 성 = 'Wielonsky';
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/220834916-32d41da7-77d9-442e-8d86-537b8615ed47.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220834996-f4c69d2f-2502-464c-99cd-18979a68e6ee.png)
+  * 테이블 풀 스캔 (type 항목 all)
+  * 스토리지 엔진에서 가져온 데이터 중 where 조건에 맞는 데이터 필터링(extra 항목 using where)
+#### 튜닝 수행
+* 단 한건의 데이터만 가져오는데 테이블 풀 스캔???
+* 인덱스로 빠른 데이터 접근 유도하는 방식으로 튜닝
+* 단 이름,성으로 구성된 복합 인덱스를 생성하기 전에 더 다양한 값이 있는 열이 무엇인지 파악
+  ![image](https://user-images.githubusercontent.com/60100532/220835968-7f1400f5-b0a0-4a1d-90f8-30203012baba.png)
+* 성 컬럼의 데이터 숫자가 더 많으므로 데이터 범위를 더 축소할 수 있는 성 컬럼을 선두로 인덱스 생성.
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  ALTER TABLE 사원
+    ADD INDEX I_사원_성_이름 (성, 이름);
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/220836298-930e12f9-90f0-41c9-9269-a87275e7149b.png)
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220836345-76f32193-2c76-4723-b646-1f610a471abc.png)
+---  
+
+
+### 인덱스를 하나만 사용하는 SQL문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT *
+  FROM 사원
+  WHERE 이름 = 'Matt'
+  OR 입사일자 = '1987-03-31';
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/220836942-30c0281a-9a77-44fa-a88c-27ad23d8b2ff.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220837151-c7135157-3f61-4b6a-983c-4a3e2e5d5111.png)
+  * 사원 테이블 풀 스캔 (type 항목 all)
+#### 튜닝 수행
+* 조건절에 해당하는 데이터 분포 확인  
+  ![image](https://user-images.githubusercontent.com/60100532/220837598-6d0341ba-a431-47c9-a50b-d9503120db5e.png)  
+  ![image](https://user-images.githubusercontent.com/60100532/220837679-c7ebc5cf-78d7-49dc-bdd0-12cc1f5270b2.png)   
+  ![image](https://user-images.githubusercontent.com/60100532/220837763-1fa56a44-3997-4aa0-b2fd-7f045394b5f2.png)
+* 전체 데이터 건수 대비 각 조건의 데이터 건수 매우 적음.
+* 소량의 데이터를 가져올 때는 보통 테이블 풀 스캔보다 인덱스 스캔이 효율적.
+* 조건절 열이 포함된 인덱스가 있는지 확인.  
+  ![image](https://user-images.githubusercontent.com/60100532/220838035-4b26a497-aafd-4d77-870a-9f5c77bb62a1.png)
+* 이름 컬럼이 포함된 인덱스는 없음.
+* 이름 컬럼에 대한 인덱스를 생성해 각각의 조건이 각각의 인덱스를 사용할 수 있도록 튜닝
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  ALTER TABLE 사원
+    ADD INDEX I_사원_이름 (이름);
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/220838321-88fb2673-d161-4aa1-9254-334d727290dd.png)
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220838436-39f2f165-7b1a-49cc-a1b0-6365d695fec4.png)
+  * 2개의 조건절이 각각 인덱스 스캔으로 수행되고 각 결과는 병합(TYPE 항목 : index_merge)
+  * 결과가 합쳐진 뒤(EXTRA 항목 : Using union) 출력.
+  * 만약 WHERE 절 ~ OR 구문에서 한쪽의 조건절이 동등 조건이 아닌 범위 조건(LIKE, BETWEEN구문) 이라면 INDEX_MERGE로 처리되지 않을 수 있음
+  * 버전에 따라 다름 -> 실행 계획을 확인한 뒤 UNION 이나 UNION ALL 구문등으로 분리 고려
+---
+
+
+
+### 비효율적인 인덱스를 사용하는 SQL문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT 사원번호, 이름, 성
+  FROM 사원
+  WHERE 성별 = 'M'
+  AND 성 = 'Baba';
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/220840706-0e0a6273-e865-46f3-b8ba-44a2123f20cf.png)
+* | 튜닝 전 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220840767-0ee48b27-98b7-4320-851b-193afeb51d3c.png)
+  * I_성별_성 인덱스를 활용해 데이터에 접근
+  * 성별과 성 컬럼에 고정된 값으로 조건을 걸었기 때문에 (ref 항목 : const, const)
+#### 튜닝 수행
+* 조건문에 작성된 열의 데이터 현황 파악  
+  ![image](https://user-images.githubusercontent.com/60100532/220841587-c562c485-08aa-46f2-b7c1-44fb7f6ed907.png)
+* 성 컬럼의 데이터는 1637건인데 비해 성별 컬럼의 데이터는 단 2건
+* 테이블의 데이터가 많아지면 많아질수록 문제가 발생할 수 있음.
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  ALTER TABLE 사원
+    DROP INDEX I_성별_성 , 
+    ADD INDEX I_성_성별(성, 성별);
+  ```     
+  ![image](https://user-images.githubusercontent.com/60100532/220842317-d1cc2a7b-c7e8-436d-9f66-a6c6659955fb.png)
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/220842391-84d99d84-8023-4cad-a327-4a9d2e5e6f17.png)
+---
+
+
+
+
+
+## 적절한 테이블 및 컬럼 속성 설정으로 착한 쿼리 만들기
+ 
