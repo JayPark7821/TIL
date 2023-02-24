@@ -1019,5 +1019,55 @@ and (select max(연봉)
 
 
 
-## 적절한 테이블 및 컬럼 속성 설정으로 착한 쿼리 만들기
- 
+
+### 분산 없이 큰 규모의 데이터를 사용하는 SQL문
+#### 현황 분석
+* | 튜닝 전 SQL 문 |
+  ```sql
+  SELECT COUNT(1)
+  FROM 급여
+  WHERE 시작일자 BETWEEN STR_TO_DATE('2000-01-01', '%Y-%m-%d') 
+                    AND STR_TO_DATE('2000-12-31', '%Y-%m-%d');
+  ```    
+  ![image](https://user-images.githubusercontent.com/60100532/221073986-b26026b7-1b93-42f3-934e-ba8df1d62baf.png)  
+* | 튜닝 전 실행 계획 |   
+  ![image](https://user-images.githubusercontent.com/60100532/221074231-fdf2ab5a-4755-4bd2-b2c7-c683db808f25.png)  
+#### 튜닝 수행
+* 급여 테이블의 총 데이터  
+  ![image](https://user-images.githubusercontent.com/60100532/221074819-3d516b62-5966-4556-b4ca-3d47787f2d3e.png)  
+* 2000년도 데이터는 전체 데이터의 약 9%에 불과  
+  ![image](https://user-images.githubusercontent.com/60100532/221074955-8c6d7e52-47a5-4460-a96e-c4df40796ddd.png)  
+* 1986년 부터 2002년 까지 데이터가 고루 퍼져있다.
+* 특정 컬럼으로 논리적 분할하는 파티셔닝 가능.
+#### 튜닝 결과
+* | 튜닝 후 SQL 문 |
+  ```sql
+  alter table 급여
+    partition by range COLUMNS (시작일자)
+        (
+            partition p85 values less than ('1985-12-31'),
+            partition p86 values less than ('1986-12-31'),
+            partition p87 values less than ('1987-12-31'),
+            partition p88 values less than ('1988-12-31'),
+            partition p89 values less than ('1989-12-31'),
+            partition p90 values less than ('1990-12-31'),
+            partition p91 values less than ('1991-12-31'),
+            partition p92 values less than ('1992-12-31'),
+            partition p93 values less than ('1993-12-31'),
+            partition p94 values less than ('1994-12-31'),
+            partition p95 values less than ('1995-12-31'),
+            partition p96 values less than ('1996-12-31'),
+            partition p97 values less than ('1997-12-31'),
+            partition p98 values less than ('1998-12-31'),
+            partition p99 values less than ('1999-12-31'),
+            partition p00 values less than ('2000-12-31'),
+            partition p01 values less than ('2001-12-31'),
+            partition p02 values less than ('2002-12-31'),
+            partition p03 values less than (maxvalue )
+        )
+  ```     
+  ![image](https://user-images.githubusercontent.com/60100532/221075760-fc8da5fa-b996-4424-8f58-fd11f502eb9b.png)  
+* | 튜닝 후 실행 계획 |  
+  ![image](https://user-images.githubusercontent.com/60100532/221076112-813d923a-73b7-4386-9b0f-d1d4eb21e320.png)
+---
+
