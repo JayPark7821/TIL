@@ -41,3 +41,35 @@
 * 루씬에서 제공 하고 있는 한글 처리를 위한 Analyzer는 CJK와 Nori Analyzer가 존재 한다.  
 ![img.png](../images/elastic-search/analyzeFlow.png)
 
+
+
+<br />  
+
+### ElastciSearch와 RDBMS 비교  
+
+|         DBMS         |      ElasticSearch       |
+|:--------------------:|:------------------------:|
+| DBMS HA 구성(MMM,M/S)  |         Cluster          |
+|    DBMS Instance     |           Node           |
+|        Table         |          Index           |
+|      Partition       |     shard / Routing      |
+|         Row          |         Document         |
+|        Column        |          Field           |
+| Row of Columnar data | Serialized JSON document |   
+
+### 주요 Setting
+* path Setting - 인덱스 데이터와 로그 데이터에 대한 저장소 설정
+  * path.data: 데이터 저장 경로 array로 설정가능
+  * path.logs: 로그 저장 경로
+* cluster.name
+* node.name
+* network.host
+* discovery setting 
+  * discovery.seed_hosts : 클러스터링 해야하는 노드 리스트 등록 
+  * cluster.initial_master_nodes : 클러스터링 초기 마스터 노드 설정
+* jvm.options.setting 
+  * Heap Size 설정
+    * System 리소스의 50%로 설정
+    * 31GB가 넘어가지 않도록 구성
+    * 설정은 환경변수로 set하거나 jvm.options 파일에 설정 (ES_JAVA_OPTS)
+ 
