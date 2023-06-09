@@ -118,3 +118,30 @@ GET /_analyze
  모든 filter적용이 가능 한 것이 아닌 문자 단위로 동작하는 필터만 사용 가능
 * text - 형태소 분석할 대상 text (array or string)
 * tokenizer - text를 토큰으로 분할 하는 작업을 수행 할 tokenizer 설정
+
+### Mappings
+* 문서와 필드를 정의하고 색인 및 저장 하는 방법을 정의
+* 필드의 집합이 문서가 되며 각 필드는 Data Type을 가짐
+* Matadata fields - 문서를 구성하는 메타정보 필드
+* Fields - 필드의 목록과 속성을 가짐
+
+### Runtime fields
+* 질의 시점에 평가/계산 되어 결과로 전달됨.
+  * 데이터를 다시 색인하지 않고 기존 문서에 필드를 추가.
+  * 데이터의 구조를 이해하지 않고 데이터 작업 시작
+  * 질의시 인덱싱 된 필드에서 반환된 값을 재정의
+  * 기본 스키마를 수정 하지 않고 특정 용도로 필드 정의
+  * Runtime field를 대상으로 search, aggregation, filtering, sorting과 같은 기능 즉시 사용
+
+### Field 
+### Common Types
+* binary - base64로 인코딩 된 바이너리 데이터 저장 허용, 검색 불가능
+* boolean - Json true, false값 / 문자열 "true", "false"값 허용 ""(empty String) -> false
+* keywords - 주로 sorting, aggregations, term-level queries에 사용  
+ term과 term-level query에 사용할 때 설정  
+ numeric 데이터 속성 중 range query계획이 없는 경우, keyword로 설정하는 것 추천  
+ case sensitive -> normalizer를 통해 upper case filter나 lower case filter를 활용해 대소문자 구분 없이 검색 가능하도록 하는 것 추천
+* numbers - numberic data라고 해서 numberic field data type으로 선언할 필요는 없다.   
+ range query유형의 질의를 사용하지 않는 경우 keyword field로 선언하는 것이 더 효과적이다.  
+ 이와 같은 사용이 확실하지 않으면, multi-field기능을 이용해서 keyword와 numeric 선언을 하면 된다.
+* 
