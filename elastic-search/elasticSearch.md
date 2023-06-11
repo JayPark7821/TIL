@@ -182,3 +182,21 @@ GET /_analyze
 * 검색은 특정 필드에 대한 매칭을 하는 방식과 
 * 검색 대상이 되는 모든 field의 value를 한꺼번에 매칭 하는 통합 검색 필드 대상의 검색이 있을 수 있다. 
 * 보통은 통합 검색 필드 운영을 하고 이외 field는 filter항목 또는 정렬 항목으로 활용
+
+#### Analysis
+* 색인과 검색에 필요한 Text분석 설정
+* Text에 대한 형태소 분석 과정을 거치는 크게 Tokenization과 Normalization두 가지가 있다.
+* Elasticsearch에서는 text유형에 analyzer 설정을 통해 tokenization을 수행하고 
+* keyword유형에 normalization을 수행한다.
+* 형태소분석은 언어와 목적에 맞는 분석기를 선택하거나 구현해서 적용.
+* 일반적으로 많이 사용하는 한글 분석기는 arirang, nori, mecab등이 있으며 
+* 적용 하는 tokenizer와 filter에 따라 분석되는 최종 token결과가 달라 질 수 있다.
+* 이런 analyzer는 색인 시점과 검색 시점에 각각 적용이 가능 하고 각 field별로도 적용이 가능함
+* 분석에 대한 일관성을 유지하고 매칭에 대한 의미를 동일하게 해석 하기 위해서는 색인시 사용한 분석기와 검색에 사용하는 분석기가 같아야함.
+* 대부분 한글 분석기는 사전기반의 분석기로 사전 관리에 대한 중요도가 매우 높다.
+* 동의어 처리 역시 검색 결과에 영향을 많이 주는 요소로 초기 구성과 관리가 매우 중요.
+* 너무 많은 항목을 모두 형태소 분석하게 되면 불필요한 저장 공간의 낭비가 발생 할 수 있으며, 색인 성능도 나빠질 수 있다.
+  * 1. 정확한 Keyword matching을 위해서 -> type은 keyword로 설정하고 normalizer를 이용해서 token filter를 적용
+  * 2. 어떤 종류의 데이터 유형이던 검색, 분석, 정렬 등과 같은 연산 적업이 필요 없고 단순 화면에 정보를 제공하는 용도라면 index:false설정을 적용.
+  * 3. numeric유형을 가지는 field중 range query를 사용하지 않고 정렬에도 사용을 안한다면 keyword로 선언하는게 유리
+  * 4. range query를 사용하는 field값에 대한 범위 지정이 가능한 경우 range field유형으로 선언 하는게 유리.
