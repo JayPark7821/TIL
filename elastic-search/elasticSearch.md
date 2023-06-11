@@ -169,3 +169,16 @@ GET /_analyze
   * 이 작업은 색인된 데이터에 변경이 발생 했을 경우 즉, 추가/수정/삭제 된 데이터를 색인에 반영.
   * 반영하기 위한 데이터는 특정 크기나 주기로 나눠서 색인 하도록 기능을 구현.
   
+#### Searching
+* 사용자가 입력한 검색어를 기반으로 정확한 의도를 파악하고 결과를 찾아 주거나 발견 할 수 있도록 도와주는 역할을 함.
+* Query Term, Match Range, Compound Query 그리고 Script, Funcion Score등이 많이 사용됨.
+* 검색은 이미 색인된 정보를 기반으로 사용자가 입력한 검색어를 매칭하는 과정.
+* 이 매칭 하는 과정에서 term query와 같은 exact matching을 하는 것과 
+* match query와 같은 입력 검색어를 한번 더 분석해서 분석된 token을 가지고 matching을 하는 방식이 있다.
+* 이 두가지 유형을 가장 많이 사용하며, 
+* 사용자가 입력한 검색어와 정확히 일치하는 문서를 찾기 위해서는 term query를 사용하고
+* 입력한 쿼리와 비슷한 문서를 찾기 위해서는 match query를 사용한다.
+* 이외 range query, script query, query string등 다양한 Query api가 있으나. 대부분 term query로 query rewrite되어 처리된다.
+* 검색은 특정 필드에 대한 매칭을 하는 방식과 
+* 검색 대상이 되는 모든 field의 value를 한꺼번에 매칭 하는 통합 검색 필드 대상의 검색이 있을 수 있다. 
+* 보통은 통합 검색 필드 운영을 하고 이외 field는 filter항목 또는 정렬 항목으로 활용
