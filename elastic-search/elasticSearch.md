@@ -200,3 +200,233 @@ GET /_analyze
   * 2. 어떤 종류의 데이터 유형이던 검색, 분석, 정렬 등과 같은 연산 적업이 필요 없고 단순 화면에 정보를 제공하는 용도라면 index:false설정을 적용.
   * 3. numeric유형을 가지는 field중 range query를 사용하지 않고 정렬에도 사용을 안한다면 keyword로 선언하는게 유리
   * 4. range query를 사용하는 field값에 대한 범위 지정이 가능한 경우 range field유형으로 선언 하는게 유리.
+
+#### Mapping
+* 검색, 결과 내 검색, 필터, 정렬, 집계
+* full text검색을 요구 하는 경우 검색 대상 field의 data type을 text로 선언
+* 입력한 검색어와 정확히 일치 하는 검색을 요구 하는 경우 검색 대상 field의 data type을 keyword로 선언
+* 범위 검색과 정렬을 요구 하는 경우 대상 field의 data type을 numeric,data 등으로 선언
+* 데이터에 대한 1:N의 관계를 요구 하는 경우 object, nested, join(parent/child), flattened field type, collapse등을 검토 합ㄴ디ㅏ.
+* 특정 값에 대한 필터와 집계 기능을 요구 하는 경우 field의 data type을 keyword 또는 numeric으로 선언
+* 검색 대상으로만 사용을 하고 value에 대한 활용이 없다면 _source에서 제거
+* 문서에 대한 정적 랭킹을 적용하고자 한다면 rank field를 생성하고 numeric으로 선언 합니다.
+* 랭킹에 대한 가중치 부여는 field boosting 기법과 rank feature를 활용한 function/script score api를 활용
+* dynamic mapping을 사용하기 보다 명시적 mapping설정을 하는게 좋다.
+* 하나의 field value를 목적에 맞춰 설정을 다르게 해야 할 경우 fields를 활용
+* 통합 검색 field와 같은 기능을 구현 하고자 한다면 copy_to를 이용해서 분석 대상 value를 추가해 준다.
+* 문서를 구성할 때 검색 결과 리스팅, 카테고리 리스팅, 상세와 같은 경우 용도와 목적에 맞게 분리 구성 하는게 좋다.
+
+### Auto Completion
+* 1. 데이터 분석을 통해 field를 정의하고 검색 대상에 대한 분석 진행.
+* 2. mapping 구성
+* 3. setting 구성을 통해 형태소 분석에 필요한 설정 진행
+
+#### 서울 지하철 검색 prac
+1. 데이터 분석을 통해 field 정의 및 검색 대상에 대한 분석 진행
+* 전철역코드, 전철역명, 호선, 외부코드 로 데이터는 이루어져 있음.
+* 전철역 코드 - code - id
+* 전철역명 - station - 검색
+* 전철역명 초성 - chosung - 검생
+* 전철역명 자모 - jamo - 검색
+* 전철역명 영어 - engtokor - 검색
+* 호선 - line - 검색/필터/집계
+* 외부코드 - excode
+
+---
+
+<br />  
+
+
+2. mapping 구성
+```json
+"id" : {
+    "type":"keyword",
+    "index":false
+    }
+```
+
+
+```json
+"station" : {  // 역명 검색 대상
+    "type":"text", // full text search 하기 위한 type text
+    "analyzer":"analyzer-subway",
+    "fields":{ // fields로 멀티필드 선언
+        "exact":{
+          "type":"keyword", // exact match을 위해 keyword로 선언
+          "normalizer":"normalizer-subway"
+        },
+        "front":{
+            "type":"text",
+            "analyzer":"edge-front-subway"
+            },
+        "back":{
+            "type":"text",
+            "analyzer":"edge-back-subway"
+          },
+        "partial":{
+            "type":"text",
+            "analyzer":"ngram-subway"
+          },
+        }
+    }
+}
+```
+
+```json
+"chosung": {
+  "type": "text",
+  "analyzer": "edge-front-subway",
+  "fields" : {
+    "exact": {
+      "type": "keyword",
+      "normalizer": "normalizer-subway"
+    },          
+    "back": {
+      "type": "text",
+      "analyzer": "edge-back-subway"
+    },
+    "partial": {
+      "type": "text",
+      "analyzer": "ngram-subway"
+    }
+  }
+}
+```
+
+```json
+"jamo": {
+  "type": "text",
+  "analyzer": "edge-front-subway",
+  "fields" : {
+    "exact": {
+      "type": "keyword",
+      "normalizer": "normalizer-subway"
+    },          
+    "back": {
+      "type": "text",
+      "analyzer": "edge-back-subway"
+    },
+    "partial": {
+      "type": "text",
+      "analyzer": "ngram-subway"
+    }
+  }
+}
+```
+
+```json 
+"engtokor": {
+  "type": "text",
+  "analyzer": "edge-front-subway",
+  "fields" : {
+    "exact": {
+      "type": "keyword",
+      "normalizer": "normalizer-subway"
+    },          
+    "back": {
+      "type": "text",
+      "analyzer": "edge-back-subway"
+    },
+    "partial": {
+      "type": "text",
+      "analyzer": "ngram-subway"
+    }
+  }
+}
+```
+#### 초성, 자모, 한글 영어 검색은 화면에 보여주지 않고 검색 matching에만 사용하기 때문에 _source에서 제거
+```json
+    "_source": {
+      "excludes": [
+        "chosung",
+        "jamo",
+        "engtokor"
+      ]
+    }
+```   
+
+---
+
+<br />  
+
+3. setting 구성을 통해 형태소 분석에 필요한 설정 진행
+```json
+"index": {
+  "number_of_shards": 1,
+  "number_of_replicas": 0,
+  "max_ngram_diff": 30   // min_gram 과 max_gram의 차이를 더 크게 할 수 있다. 지정하지 않으면 아래 ngram세팅을 변경해도 적용되지 않는다.
+}
+```
+```json
+"analysis": {
+      "analyzer": {
+        "analyzer-subway": {
+          "type": "custom",
+          "tokenizer": "arirang_tokenizer"
+        },        
+        "ngram-subway": {
+          "type": "custom",
+          "tokenizer": "partial",
+          "filter": [
+            "lowercase"
+          ]
+        },
+        "edge-front-subway": {
+          "type": "custom",
+          "tokenizer": "edgefront",
+          "filter": [
+            "lowercase"
+          ]
+        },
+        "edge-back-subway": {
+          "type": "custom",
+          "tokenizer": "edgeback",
+          "filter": [
+            "lowercase"
+          ]
+        }
+      }
+}
+```
+```json
+  "tokenizer": {
+        "partial": {
+          "type": "ngram",
+          "min_gram": 1,
+          "max_gram": 30,
+          "token_chars": [
+            "letter",
+            "digit"
+          ]
+        },
+        "edgefront": {
+          "type": "edge_ngram",
+          "min_gram": 1,
+          "max_gram": 30,
+          "token_chars": [
+            "letter",
+            "digit"
+          ]
+        },
+        "edgeback": {
+          "type": "edge_ngram",
+          "min_gram": 1,
+          "max_gram": 30,
+          "size": "back",
+          "token_chars": [
+            "letter",
+            "digit"
+          ]
+        }
+      }
+```
+```json
+"normalizer": {
+        "normalizer-subway": {
+          "type": "custom",
+          "filter": [
+            "lowercase"
+          ]
+        }
+      }
+```
