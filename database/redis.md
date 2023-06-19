@@ -145,3 +145,23 @@
 * volatile-lfu : LFU를 사용하되 expire field가 true로 설정된 항목들 중에서만 삭제
 * volatile-random : expire field가 true로 설정된 항목들 중에서 랜덤하게 삭제
 * volatile-ttl : expire field가 true로 설정된 항목들 중에서 짧은 TTL순으로 삭제
+
+#### SLOWLOG 설정
+* 수행시간이 설정한 기준 시간 이상인 쿼리의 로그를 보여줌
+* 측정 기준인 수행시간은 I/O동작을 제외함.
+* 로깅되는 기준 시간(microseconds)
+```redis
+slowlog-log-slower-than 10000
+```
+* 로그 최대 길이
+```redis
+slowlog-max-len 128
+```
+* slowlog 개수 확인
+```redis
+slowlog len
+```
+* slowlog 조회
+```redis
+slowlog get [count]
+```
