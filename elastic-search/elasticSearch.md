@@ -10,7 +10,7 @@
 * 수정이 불가능한 Immutable Type
 * 여러개로 생성된 Segments파일들을 Merge라는 작업을 통해 하나의 색인 파일로 만드는 과정 필요
 * 하나의 Index는 하나의 IndexWriter로 구성
-![img.png](../images/elastic-search/indexingFlow.png)  
+![img.png](elastic-search/indexingFlow.png)  
 
 <br />  
 
@@ -28,7 +28,7 @@
 * IndexWriter 색인후, IndexSearchㅗ 검색하는 과정
 * IndexSearch는 IndexReader를 이용해서 검색 수행을 하게 된다.  
 즉, 하나의 index에는 Segment별로 N개의 LeafReader가 존재함.  
-![img.png](../images/elastic-search/indexSearch.png)
+![img.png](elastic-search/indexSearch.png)
 
 
 <br />  
@@ -36,10 +36,10 @@
 ### 형태소 분석이란?
 * 입력 받은 문자열에서 검색 가능한 정보 구조로 분석 및 분해 하는 과정
 * Analyzer는 형태소 분석을 위한 최상위 클래스 이며, 하나의 Tokenizer와 다수의 Filter로 구성이 됩니다.
-![img.png](../images/elastic-search/analyzer.png)  
+![img.png](elastic-search/analyzer.png)  
 * 아래 과정에서 6번의 Token Filter는 정의 된 순서에 맞춰 적용 되기 떄문에 적용 시 순서가 중요 하다.
 * 루씬에서 제공 하고 있는 한글 처리를 위한 Analyzer는 CJK와 Nori Analyzer가 존재 한다.  
-![img.png](../images/elastic-search/analyzeFlow.png)
+![img.png](elastic-search/analyzeFlow.png)
 
 
 
