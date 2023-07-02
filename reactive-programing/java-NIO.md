@@ -119,4 +119,29 @@
 
 #### Buffer 위치 메서드 - clear
 * clear : Buffer의 limit 위치를 capacity위치로 이동시키고, position을 0으로 초기화
-* Buffer를 초기화 할때 사용
+* Buffer를 초기화 할때 사용  
+
+
+--- 
+### DirectByteBuffer
+- native 메모리(off-heap)에 저장
+- 커널 메모리에서 복사를 하지 않으므로 데이터를 읽고 쓰는 속도가 빠르다.
+- 비용이 많이 드는 system call을 사용하므로 allocate, deallocate가 느리다.
+
+### HeapByteBuffer
+- JVM heap 메모리에 저장. byte array를 랩핑
+- 커널 메모리에서 복사가 일어나므로 데이터를 읽고 쓰는 속도가 느리다.
+- (이 과정에서 임시로 Direct Buffer를 만들기 때문에 성능 저하)
+- gc에서 관리 되므로 allocate, deallocate가 빠르다.   
+
+---
+
+### Java NIO를 non-block하게 사용하려면?
+#### SelectableChannel
+* SocketChannel, ServerSocketChannel 모두 AbstractSelectableChannel을 상속
+* AbstractSelectableChannel은 SelectableChannel을 구현  
+
+<br />
+
+* configureBlocking 과 register 메소드 제공
+* configureBlocking : serverSocketChannel의 accept, socketChannel의 connect등이 non-blocking으로 동작한다.
