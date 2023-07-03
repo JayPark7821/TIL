@@ -61,14 +61,14 @@
 * 커널 버퍼에서 jvm 버퍼로 복사. -> 이 과정에서 cpu자원을 소모
 * jvm 버퍼, jvm 메모리에 있기 때문에 gc 대상 -> 이 과성에서 또 cpu자원을 소모
 
-![img.png](img.png)
+![img.png](../resource/reactive-programing/java-nio/img.png)
 
 #### 동기 blocking으로 동작
 
 * application이 read를 호출하면, 커널이 응답을 돌려줄 때까지, 아무것도 할 수 없다.
 * I/O요청이 발생할 때마다 쓰레드를 새로 할당하면, 쓰레드를 생성 및 관리하는 비용과 컨텍스트 스위칭으로 인한 cpu 자원 소모
 
-![img_1.png](img_1.png)
+![img_1.png](../resource/reactive-programing/java-nio/img_1.png)
 
 
 ---
@@ -95,7 +95,7 @@
 * 데이터를 쓸 때: 먼저 Buffer에 데이터를 저장하고 Channel의 write() 메서드를 사용하여 목적지로 전달.
 * clear() 메서드로 초기화하여 다시 사용 가능.  
   
-![img_2.png](img_2.png)
+![img_2.png](../resource/reactive-programing/java-nio/img_2.png)
 
 ### Buffer 위치 속성
 * capacity: Buffer가 저장할 수 있는 데이터의 최대 크기. Buffer 생성시 결정되며 변경 불가.
@@ -145,3 +145,13 @@
 
 * configureBlocking 과 register 메소드 제공
 * configureBlocking : serverSocketChannel의 accept, socketChannel의 connect등이 non-blocking으로 동작한다.
+
+---  
+
+## Java AIO
+* Java 1.7 부터 NIO2를 지원
+* AsynchronousChannel, callback, future 지원
+* Thread pool과 epoll, kqueue등의 이벤트 알림 system call을 사용
+* I/O가 준비 되었을떄, Future 혹은 Callback으로 비동기적인 로직 처리 가능  
+  
+![img_3.png](../resource/reactive-programing/java-nio/img_3.png)
