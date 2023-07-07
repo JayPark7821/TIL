@@ -101,7 +101,7 @@ eventLoopGroup.shutdownGracefully();
   * I/O task에 해당
 * pipeline에서는 결과로 I/O 작업을 수행  
 
-![img.png](img.png)
+![img.png](../resource/reactive-programing/netty/img.png)
 
 ## ChannelPipeline 구성
 * pipeline은 ChannelHandlerContext의 연속
@@ -110,7 +110,7 @@ eventLoopGroup.shutdownGracefully();
 * 모든 inbound I/O 이벤트는 next로
 * 모든 outbound I/O 작업은 prev로   
 
-![img_1.png](img_1.png)
+![img_1.png](../resource/reactive-programing/netty/img_1.png)
 
 ## ChannelHandlerContext 구성
 * ChannelHandlerContext는 EventExecutor와 ChannelHandler를 포함
@@ -119,7 +119,7 @@ eventLoopGroup.shutdownGracefully();
   * 다음 context로 전달하지 않고 I/O 작업을 수행할 수도 있다.
 * ChannelHandlerContext는 EventExecutor를 포함할 수도 있고 포함하지 않을 수도 있다.  
 
-![img_2.png](img_2.png)
+![img_2.png](../resource/reactive-programing/netty/img_2.png)
 
 
 ## ChannelHandlerContext
@@ -331,10 +331,187 @@ private static ChannelInboundHandler echoHandler() {
 * I/O 이벤트는 Head -> loggingHandler -> echoHandler 순으로 전달
 * I/O 작업은 echoHandler -> loggingHandler -> Head 순으로 전달  
 
-![img_3.png](img_3.png)
+![img_3.png](../resource/reactive-programing/netty/img_3.png)
 
 ### echo handler 분리하기
 * Request, Response 전용 handler
 * 들어오는 ByteBuf를 String으로 바꿔 전달하는 ChannelInboundHandler 기반의 requestHandler 추가.
 * 나가는 String을 ByteBuf로 바꿔서 전달하는 ChannelOutboundHandler 기반의 responseHandler 추가.
 
+
+### requestHandler
+* ByteBuf로 부터 CharSequence를 읽어서 ctx.fireChannelRead로 다음(next) inboundHandler에게 전달.
+* finally를 통해서 ByteBuf를 release 하여 리소스 해제
+
+```java
+private static ChannelInboundHandler requestHandler(){
+	    return new ChannelInboundHandlerAdapter(){
+			@Override
+            public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                if(msg instanceof ByteBuf){
+                    try{
+                        var buf = (ByteBuf)msg;
+                        var len = buf.readableBytes();
+                        var charset = StandardCharsets.UTF_8;
+                        var body = buf.readCharSequence(len, charset);
+                        log.info("requestHandler message : {}", body);
+						
+                        ctx.fireChannelRead(body);
+                    }finally {
+                        ReferenceCountUtil.release(msg);
+                    }
+                }
+            }
+        }
+}
+```
+
+### 변경된 echoHandler
+* 이전 handler로 부터 String 타입의 msg를 수신.
+* 그래도 ctx.writeAndFlush를 통해서 다음(prev) outboundHandler에게 전달.
+* addListener를 통해서 write가 모두 끝나면 channel을 close
+
+```java
+private static ChannelInboundHandler echoHandler(){
+	    return new ChannelInboundHandlerAdapter(){
+			@Override
+            public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                if(msg instanceof String){
+                  var request = (String)msg;
+                  log.info("echoHandler message : {}", request);
+				  
+                  ctx.writeAndFlush(request)
+                          .addListener(ChannelFutureListener.CLOSE);
+                }
+            }
+        }
+}
+```
+
+### responseHandler
+* 이전 handler로 부터 String을 받아서 
+* buffer를 생성해서 값을 집어 넣고
+* ctx.write를 호출하여 데이터를 다음 handler에 전달
+
+```java
+private static ChannelOutboundHandler responseHandler(){
+	    return new ChannelOutboundHandlerAdapter(){
+			@Override
+            public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+                if(msg instanceof String){
+                    log.info("responseHandler message : {}", msg);
+					
+					var response = (String)msg;
+                    var charset = StandardCharsets.UTF_8;
+                    var buf = ctx.alloc().buffer();
+                    buf.writeCharSequence(response, charset);
+                    ctx.write(buf, promise);
+                }
+			}
+        }
+}
+```
+
+### echo handler 코드 줄이기
+* String Encoder/Decoder
+* StringDecoder: ByteBuf 객체를 String으로 변경하여 다음 handler에게 제공
+* StringEncoder: String 객체를 ByteBuf로 변경하여 다음 handler에게 제공
+
+```java
+public class StringDecoder extends MessageToMessageDecoder<ByteBuf> {
+
+  ...
+    @Override
+    protected void decode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
+        out.add(msg.toString(charset));
+    }
+}
+public class StringEncoder extends MessageToMessageEncoder<CharSequence> {
+
+	    ...
+        @Override
+        protected void encode(ChannelHandlerContext ctx, CharSequence msg, List<Object> out) throws Exception {
+            if(msg.length() == 0){
+                return;
+            }
+            out.add(ByteBufUtil.encodeString(ctx.alloc(), CharBuffer.wrap(msg), charset));
+        }
+}
+```
+### StringEncoder/Decoder 적용
+* echoHandler 앞에 StringEncoder,StringDecoder 적용
+* StringEncoder/Decoder는 Sharable annotation이 붙어있기 때문에 channel마다 재사용 가능
+
+```java
+private static ChannelInboundHandler acceptor(EventLoopGroup childGroup){
+	var executorGroup = new DefaultEventExecutorGroup(4);
+    var stringEncoder = new StringEncoder();
+	var stringDecoder = new StringDecoder();
+	
+	return new ChannelInboundHandlerAdapter(){
+		@Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            log.info("Acceptor.channelRead");
+			if (msg instanceof SocketChannel) {
+                SocketChannel socketChannel = (SocketChannel)msg;
+                socketChannel.pipeline()
+                        .addLast(executorGroup, new LoggingHandler(LogLevel.INFO));
+                socketChannel.pipeline()        
+                        .addLast(stringEncoder, stringDecoder, echoHandler());
+                        
+                childGroup.register(socketChannel);
+        }
+	}
+}
+
+```
+
+### ServerBootstrap 적용
+* Bootstrap 객체는 netty 서버, 클라이언트를 쉽게 만들 수 있게 편의 method 제공
+* group : EventLoopGroup 등록, 각각 parent(accept 이벤트),child(read 이벤트)
+* channel : Channel class를 기반으로 instance 자동으로 생성
+* childHandler : connect 되었을때 실행할 코드
+* bind : 특정 호스트, 포트에 bindgkrh channelFuture반환
+* ChannelInitializer : socketChannel이 등록되면 initChannel 실행
+
+```java
+EventLoopGroup parentGroup = new NioEventLoopGroup();
+EventLoopGroup childGroup = new NioEventLoopGroup(4);
+
+var bootstrap = new ServerBootstrap();
+var executorGroup = new DefaultEventExecutorGroup(4);
+var stringEncoder = new StringEncoder();
+var stringDecoder = new StringDecoder();
+
+var bind = bootstrap
+        .group(parentGroup, childGroup)
+        .channel(NioServerSocketChannel.class)
+        .childHandler(new ChannelInitializer<SocketChannel>() {
+            @Override
+            protected void initChannel(SocketChannel ch) throws Exception {
+                ch.pipeline()
+                        .addLast(executorGroup, new LoggingHandler(LogLevel.INFO))
+                        .addLast(stringEncoder, stringDecoder, echoHandler());
+            }
+        })
+        .option(ChannelOption.SO_BACKLOG, 120)
+        .childOption(ChannelOption.SO_KEEPALIVE, true)
+        .bind(8080);
+
+bind.sync().addListener(future ->{
+	if(future.isSuccess()){
+		log.info("bind success");
+	}
+})
+```
+### EventLoopGroup과 EventLoop  
+
+![img_4.png](../resource/reactive-programing/netty/img_4.png)
+
+### EventLoop와 EventExecutor, Selector  
+
+![img_5.png](../resource/reactive-programing/netty/img_5.png)
+
+### Channel과 ChannelPipeline, ChannelHandlerContext  
+  
+![img_6.png](../resource/reactive-programing/netty/img_6.png)
