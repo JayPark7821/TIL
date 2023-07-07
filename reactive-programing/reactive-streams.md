@@ -160,10 +160,10 @@ public static void main(String[] args) {
 }
 ```
 * n == 1
-![img.png](../resource/reactive-streams/img.png)
+![img.png](../resource/reactive-programing/reactive-streams/img.png)
 
 * n == 4
-![img_1.png](../resource/reactive-streams/img_1.png)
+![img_1.png](../resource/reactive-programing/reactive-streams/img_1.png)
 
 * publisher와 subscriber를 생성
 * publisher에 subscriber를 등록
@@ -247,7 +247,7 @@ public class SimpleSubscriber<T> implements Subscriber<T> {
 }
 
 ```
-![img_2.png](../resource/reactive-streams/img_2.png)
+![img_2.png](../resource/reactive-programing/reactive-streams/img_2.png)
 
 ### Flux - subscribeOn
 ```java
@@ -276,7 +276,7 @@ public class FluxSimpleExample {
 }
 
 ```
-![img_3.png](../resource/reactive-streams/img_3.png)
+![img_3.png](../resource/reactive-programing/reactive-streams/img_3.png)
 
 ### Flux - subscribe
 * subscribe하지 않으면, 아무일도 일어나지 않는다.
@@ -302,7 +302,7 @@ public class FluxNoSubscribeExample {
 	}
 }
 ```
-![img_4.png](../resource/reactive-streams/img_4.png)
+![img_4.png](../resource/reactive-programing/reactive-streams/img_4.png)
 
 ### Flux - backPressure
 ```java
@@ -344,7 +344,7 @@ public class FluxContinuousRequestExample {
 	}
 }
 ```
-![img_5.png](../resource/reactive-streams/img_5.png)
+![img_5.png](../resource/reactive-programing/reactive-streams/img_5.png)
 * Subscriber가 request를 하지 않으면, 데이터를 전달하지 않는다. -> 원하는 만큼만 처리할 수 있다.
 
 ---  
@@ -385,7 +385,7 @@ public class FluxToMonoExample {
 	}
 }
 ```
-![img_6.png](../resource/reactive-streams/img_6.png)  
+![img_6.png](../resource/reactive-programing/reactive-streams/img_6.png)  
 
 <br />  
 
@@ -408,7 +408,7 @@ public class FluxToListMonoExample {
 	}
 }
 ```
-![img_7.png](../resource/reactive-streams/img_7.png)
+![img_7.png](../resource/reactive-programing/reactive-streams/img_7.png)
 
 
 #### Mono를 Flux로
@@ -432,7 +432,7 @@ public class MonoToFluxExample {
 }
 
 ```
-![img_8.png](../resource/reactive-streams/img_8.png)
+![img_8.png](../resource/reactive-programing/reactive-streams/img_8.png)
 
 <br />  
 
@@ -456,7 +456,7 @@ public class ListMonoToFluxExample {
 }
 
 ```
-![img_9.png](../resource/reactive-streams/img_9.png)
+![img_9.png](../resource/reactive-programing/reactive-streams/img_9.png)
 
   
 ---
