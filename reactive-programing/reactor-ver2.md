@@ -368,4 +368,119 @@ Flux.fromStream(IntStream.range(0, 10).boxed())
 
 <br />  
 
- 
+---
+
+## Thread
+* 아무런 설정을 하지 않았다면, publisher는 subscribe를 호출한 caller의 쓰레드에서 실행
+* subscribe에 제공된 lambda혹은 scheduler 또한 caller의 쓰레드에서 실행.
+
+```java
+@Slf4j
+public class SingleThreadRunExample {
+
+	public static void main(String[] args) {
+		log.info("start main");
+		final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+		try{
+			executor.submit(() -> {
+				Flux.create(sink -> {
+					for (int i = 1; i < 5; i++) {
+						log.info("next : {}", i);
+						sink.next(i);
+					}
+				}).subscribe(value -> log.info("value : {}", value));
+			});
+		}finally {
+			executor.shutdown();
+		}
+		log.info("end main");
+	}
+}
+
+```  
+
+![img.png](img.png)
+
+
+## Scheduler
+* Publish 혹은 Subscribe에 어떤 Scheduler가 적용되었는가에 따라서 task를 실행하는 쓰레드풀이 결정
+* 즉시 task를 실행하거나 delay를 두고 실행 가능.
+
+### Scheduler - Schedulers.immediate()
+* subscribe를 호출한 caller 쓰레드에서 즉시 실행
+* 별도로 Schedulers를 넘기지 않았을 때, Schedulers.immediate 사용
+
+```java
+@Slf4j
+public class ImmediateSchedulerExample {
+	public static void main(String[] args) {
+		Flux.create(sink -> {
+			for (int i = 1; i <= 5; i++) {
+				log.info("next : {}", i);
+				sink.next(i);
+			}
+		}).subscribeOn(
+			Schedulers.immediate()
+		).subscribe(value->log.info("value : {}", value));
+	}
+}
+```  
+
+![img_1.png](img_1.png)
+
+### Scheduler - Schedulers.single()
+* 캐싱된 1개 크기의 쓰레드풀을 제공
+* 모든 publish, subscribe가 하나의 쓰레드에서 실행
+
+```java
+@Slf4j
+public class SingleSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		log.info("start main");
+		for (int i = 0; i < 10; i++) {
+			final int idx = i;
+			Flux.create(sink -> {
+				log.info("next : {}", idx);
+				sink.next(idx);
+			}).subscribeOn(
+				Schedulers.single()
+			).subscribe(value -> log.info("value : {}", value));
+		}
+		Thread.sleep(100);
+		log.info("end main");
+	}
+}
+
+```
+
+![img_2.png](img_2.png)
+
+### Scheduler - Schedulers.parallel()
+* 캐싱된 n개 크기의 쓰레드풀을 제공
+* 기본적으로 CPU 코어 수만큼의 크기를 갖는다.
+
+```java
+@Slf4j
+public class ParallelSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		log.info("start main");
+		for (int i = 0; i < 10; i++) {
+			final int idx = i;
+			Flux.create(sink -> {
+				log.info("next : {}", idx);
+				sink.next(idx);
+			}).subscribeOn(
+				Schedulers.parallel()
+			).subscribe(value -> log.info("value : {}", value));
+		}
+		Thread.sleep(100);
+		log.info("end main");
+	}
+}
+
+```  
+
+![img_3.png](img_3.png)
