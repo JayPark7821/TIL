@@ -193,3 +193,179 @@ Flux.fromStream(IntStream.range(0,10).boxed())
         .take(5,true)
         .subscribe(subscriber);
 ```
+
+## Sequence
+### Sequence - just
+* Mono.just 혹은 Flux.just 를 통해서 주어진 객체를 Subscriber에게 전달
+```java
+Mono.just(1)
+        .subscribe(value -> log.info("value : {}", value));
+
+Flux.just(1,2,3,4,5)
+        .subscribe(value -> log.info("value : {}", value));
+
+```
+
+### Sequence - error
+* Mono.error 혹은 Flux.error 를 통해서 Subscriber에게 onError 이벤트만 전달
+```java
+Mono.error(new RuntimeException("mono error"))
+        .subscribe(value -> log.info("value : {}", value),
+                error -> log.error("error : {}", error.getMessage())
+        );
+
+Flux.error(new RuntimeException("flux error"))
+        .subscribe(value -> log.info("value : {}", value),
+                error -> log.error("error : {}", error.getMessage())
+        );
+```
+
+### Sequence - empty
+* Mono.empty 혹은 Flux.empty 를 통해서 Subscriber에게 onComplete 이벤트만 전달
+```java
+Mono.empty()
+        .subscribe(value -> log.info("value : {}", value),
+                null,
+                () -> log.info("complete")
+        );
+
+Flux.empty()
+        .subscribe(value -> log.info("value : {}", value),
+                null,
+                () -> log.info("complete")
+        );
+```
+
+### Sequence - mono from
+* fromCallable : Callable 함수형 인터페이스를 실행하고 반환값을 onNext로 전달.
+* fromFuture : Future를 받아서 done 상태가 되면 반환값을 onNext로 전달
+* fromSupplier : Supplier 함수형 인터페이스를 실행하고 반환값을 onNext로 전달.
+* fromRunnable : Runnable 함수형 인터페이스를 실행하고 끝난후 onComplete 전달.
+
+```java
+Mono.fromCallable(()->{
+	return 1;
+        }).subscribe(value -> log.info("value : {}", value));
+
+Mono.fromFuture(CompletableFuture.supplyAsync(()->{
+	return 1;
+        })).subscribe(value -> log.info("value : {}", value));
+
+Mono.fromSupplier(()->{
+    return 1;
+        }).subscribe(value -> log.info("value : {}", value));
+
+Mono.fromRunnable(()->{
+    log.info("runnable");
+        }).subscribe(null, null, () -> {
+			log.info("complete fromRunable");
+        });
+```
+### Sequence - flux from
+* fromIterable : Iterable을 받아서 각각의 item을 onNext로 전달
+* fromStream : stream을 받아서 각각의 item을 onNext로 전달
+* fromArray : array를 받아서 각각의 item을 onNext로 전달
+* range(start, n) : start부터 시작해서 한개씩 커진 값을 n개 만큼 onNext로 전달.
+
+```java
+Flux.fromIterable(List.of(1,2,3,4,5))
+        .subscribe(value -> log.info("value : {}", value));
+
+Flux.fromStream(IntStream.range(1,6).boxed())
+        .subscribe(value -> log.info("value : {}", value));
+
+Flux.fromArray(new Integer[]{1,2,3,4,5})
+        .subscribe(value -> log.info("value : {}", value));
+
+Flux.range(1,5)
+        .subscribe(value -> log.info("value : {}", value));
+```
+
+### Sequence - generate
+* 동기적으로 Flux를 생성
+* stateSupplier : 초기값을 제공하는 Callable
+* generator
+  * 첫 번째 인자로 state를 제공. 변경된 state를 반환. 이 state로 종료 조건을 지정
+  * 두 번쨰 인자로 SynchronousSink를 제공 명시적으로 next, error, complete 호출 가능.
+  * 한 번의 generator에서 최대 한 번만 next 호출 가능
+
+```java
+Flux.generate(
+        ()-> 0,
+        (state, sink) ->{
+			sink.next(state);
+			if(state == 9){
+				sink.complete();
+        }
+			return state + 1;
+        })
+        .subscribe(
+			value -> log.info("value : {}", value),
+            error -> log.error("error : {}", error.getMessage()),
+            () -> log.info("complete")
+        );
+```
+* 초기값을 0으로 세팅
+* generator에서 현재 state를 next로 전달
+* 만약 state가 9라면 complete 이벤트 전달
+* state + 1 반환
+
+
+### Sequence - create
+* 비동기적으로 Flux를 생성
+* FluxSink를 노출
+  * 명시적으로 next, error, complete 호출 가능
+  * SynchronousSink와 다르게 여러 번 next 가능
+  * 여러 thread에서 동시에 호출 가능
+  
+```java
+Flux.create(sink ->{
+	var task1 = CompletableFuture.runAsync(()->{
+		for(int i = 0; i < 5; i++){
+			sink.next(i);
+        }
+	});
+	
+	var task2 = CompletableFuture.runAsync(()->{
+		for(int i = 5; i < 10; i++){
+			sink.next(i);
+        }
+	});
+	CompletableFuture.allOf(task1, task2)
+        .thenRun(sink::complete);
+	
+}).subscribe(
+        value -> log.info("value : {}", value),
+        error -> log.error("error : {}", error.getMessage()),
+        () -> log.info("complete")
+);
+```
+* 2개의 쓰레드 에서 sink.next를 수행
+* CompletableFuture의 allOf를 활용하여 두개의 작업이 끝난 후 complete 이벤트 전달
+
+
+### Sequence - handle
+* 독립적으로 sequence를 생성할 수는 없고 존재하는 source에 연결
+* handler
+  * 첫 번쨰 인자로 source의 item이 제공
+  * 두 번째 인자로 SynchronousSink를 제공
+  * sink의 next를 이용해서 현재 주어진 item을 전달할지 말지를 결정
+  * 일종의 interceptor로 source의 item을 필터 하거나 변경할 수 있다.
+  
+```java
+Flux.fromStream(IntStream.range(0, 10).boxed())
+        .handle((value, sink) ->{
+			if(value % 2 == 0){
+				sink.next(value);
+            }
+        }).subscribe(
+			value -> log.info("value : {}", value),
+            error -> log.error("error : {}", error.getMessage()),
+            () -> log.info("complete")
+        );
+
+```  
+
+<br />  
+
+ 
