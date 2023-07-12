@@ -484,3 +484,366 @@ public class ParallelSchedulerExample {
 ```  
 
 ![img_3.png](img_3.png)
+
+
+### Scheduler - Schedulers.boundedElastic()
+* 캐싱된 고정되지 않은 크기의 쓰레드풀을 제공
+* 재사용할 수 있는 쓰레드가 있다면 사용하고, 없으면 새로 생성
+* 특정 시간(기본 60초) 사용하지 않으면 제거
+* 생성 가능한 쓰레드 수 제한 (기본 cpu * 10)
+* I/O blocking 작업을 수행할때 적합.
+
+### Scheduler - Schedulers.newXX()
+* single, parallel, boundedElastic 모두 캐싱된 쓰레드풀을 제공
+* newSingle, newParallel, newBoundedElastic은 새로운 쓰레드풀을 만들어서 제공
+* dispose로 쓰레드풀을 해제  
+  
+```java
+@Slf4j
+public class NewSingleSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		log.info("start main");
+		for (int i = 0; i < 100; i++) {
+			final Scheduler newSingle = Schedulers.newSingle("single");
+			final int idx = i;
+			Flux.create(sink -> {
+				log.info("next : {}", idx);
+				sink.next(idx);
+			}).subscribeOn(
+				newSingle
+			).subscribe(value -> {
+				log.info("value : {}", value);
+				newSingle.dispose();
+			});
+		}
+		Thread.sleep(100);
+		log.info("end main");
+	}
+}
+
+```
+
+### Scheduler - Schedulers.fromExecutorService()
+* 이미 존재하는 ExecutorService로 Scheduler 생성
+
+```java
+@Slf4j
+public class ExecutorServiceSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		log.info("start main");
+		final ExecutorService executor = Executors.newSingleThreadExecutor();
+		for (int i = 0; i < 100; i++) {
+			final int idx = i;
+			Flux.create(sink -> {
+				log.info("next : {}", idx);
+				sink.next(idx);
+			}).subscribeOn(
+				Schedulers.fromExecutorService(executor)
+			).subscribe(value -> {
+				log.info("value : {}", value);
+			});
+		}
+		Thread.sleep(100);
+		executor.shutdown();
+		log.info("end main");
+	}
+}
+```
+
+## publishOn과 subscribeOn
+* publishOn은 위치가 중요하고 subscribeOn은 위치가 중요하지 않다.
+* A -> B -> C 순으로 연산자가 chaining 되어 있다면 별도의 publishOn이 없다면, A를 실행한 쓰레드가 B를 실행하고, B를 실행한 쓰레드가 C를 실행하는 등 쓰레드도 Chaining
+* source가 실행되는 쓰레드를 설정할 수 있고(subscribeOn), 중간에서 실행 쓰레드를 변경할 수 있다.(publishOn)
+
+### publishOn
+* Scheduler를 인자로 받는다.
+* publishOn 이후에 추가되는 연산자들의 실행 쓰레드에 영향을 준다.
+* 그 이후 다른 publishOn이 적용되면 추가된 Scheduler로 실행 쓰레드 변경
+* 쓰레드풀 중 하나의 쓰레드만 지속적으로 사용
+
+```java
+@Slf4j
+public class PublishOnSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		Flux.create(sink->{
+			for (int i = 0; i < 5; i++) {
+				log.info("next : {}", i);
+				sink.next(i);
+			}
+		}).publishOn(Schedulers.single())
+			.doOnNext(item -> log.info("doOnNext : {}", item))
+			.publishOn(Schedulers.boundedElastic())
+			.doOnNext(item -> log.info("doOnNext2 : {}", item))
+			.subscribe(value -> log.info("value : {}", value));
+
+		Thread.sleep(100);
+	}
+}
+```  
+
+![img_4.png](img_4.png)
+
+### subscribeOn
+* Scheduler를 인자로 받는다.
+* source의 실행 쓰레드를 변경한다.
+
+```java
+@Slf4j
+public class SubscribeOnSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		Flux.create(sink->{
+			for (int i = 0; i < 5; i++) {
+				log.info("next : {}", i);
+				sink.next(i);
+			}
+		}).doOnNext(item -> log.info("doOnNext : {}", item))
+			.doOnNext(item -> log.info("doOnNext2 : {}", item))
+			.subscribeOn(Schedulers.boundedElastic())
+			.subscribe(value -> log.info("value : {}", value));
+		Thread.sleep(100);
+	}
+}
+```  
+
+![img_5.png](img_5.png)
+
+## publishOn과 subscribeOn
+```java
+@Slf4j
+public class PublishOnSubscribeOnSchedulerExample {
+	@SneakyThrows
+	public static void main(String[] args) {
+		Flux.create(sink->{
+			for (int i = 0; i < 5; i++) {
+				log.info("next : {}", i);
+				sink.next(i);
+			}
+		}).publishOn(Schedulers.single())
+			.doOnNext(item -> log.info("doOnNext : {}", item))
+			.publishOn(Schedulers.boundedElastic())
+			.doOnNext(item -> log.info("doOnNext2 : {}", item))
+			.subscribeOn(Schedulers.parallel())
+			.subscribe(value -> log.info("value : {}", value));
+		Thread.sleep(100);
+	}
+}
+```  
+
+![img_6.png](img_6.png)
+
+<br />
+
+---
+
+## 에러 핸들링.
+* Reactive streams에서 onError 이벤트가 발생하면 더 이상 onNext, onComplete 이벤트를 생산하지 않고 종료
+* Reactor에서 onError 이벤트가 발생하면 onError 이벤트를 아래로 전파.
+* onError 이벤트를 처리하기 위해
+  * 고정된 값을 반환하거나.
+  * publisher를 반환하거나.
+  * onComplete 이벤트로 변경하거나.
+  * 다른 에러로 변환하거나
+
+### 에러 핸들링이 없는 경우
+* source나 연산자에서 에러가 발생했지만 따로 처리하지 않은 경우 기본적으로 onErrorDropped가 호출
+* onErrorDropped의 기본 구현은 에러를 출력  
+
+![img_7.png](img_7.png)
+
+### 에러 핸들링이 없는 경우
+```java
+@Slf4j
+public class ErrorNoHandlerExample {
+	public static void main(String[] args) {
+		Flux.create(sink -> {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+			sink.error(new RuntimeException("error"));
+		}).subscribe();
+	}
+}
+```
+
+![img_8.png](img_8.png)
+
+### errorConsumer
+* subscribe의 두번째 인자인 errorConsumer를 통해서 error를 얻고 action 수행 가능.
+
+```java
+@Slf4j
+public class ErrorConsumerExample {
+	public static void main(String[] args) {
+		Flux.error(new RuntimeException("error"))
+			.subscribe(
+				value -> log.info("value : {}", value),
+				error -> log.error("error : " , error));
+	}
+}
+```  
+
+![img_9.png](img_9.png)
+
+
+### onErrorReturn
+* onError 이벤트를 처리하기 위해 고정된 값을 반환
+
+```java
+Flux.error(new RuntimeException("error"))
+        .onErrorReturn(0)
+        .subscribe(
+                value -> log.info("value : {}", value));
+
+// value : 0
+```
+
+* 고정된 값을 넘기기 위해, 함수를 실행하면 문제가 발생할 수 있다.
+* 에러가 발생하지 않더라도 무조건 함수를 실행한 후 값을 사용
+
+```java
+@Slf4j
+public class OnErrorReturnAfterExecuteExample {
+	public static void main(String[] args) {
+		log.info("start main");
+		Flux.just(1)
+			.onErrorReturn(shouldDoOnError())
+			.subscribe(value-> log.info("value : {}", value));
+
+		log.info("end main");
+	}
+
+	private static int shouldDoOnError() {
+		log.info("shouldDoOnError");
+		return 0;
+	}
+}
+```  
+![img_10.png](img_10.png)  
+
+### onErrorResume
+* onError 이벤트를 처리하기 위해 publisher를 반환하는 추상 함수를 실행
+* 해당 publisher의 onNext, onError, onComplete 이벤트를 아래로 전달
+* error 이벤트가 발생한 상황에서만 apply를 실행
+  * Mono.just 혹은 Flux.just와 함께 사용한다면?
+  
+```java
+@Slf4j
+public class OnErrorResumeExample {
+	public static void main(String[] args) {
+		Flux.error(new RuntimeException("error"))
+			.onErrorResume(new Function<Throwable, Publisher<?>>() {
+				@Override
+				public Publisher<?> apply(final Throwable throwable) {
+					return Flux.just(0, -1, -2);
+				}
+			})
+			.subscribe(value -> log.info("value : {}", value));
+	}
+}
+```  
+
+![img_11.png](img_11.png)
+
+
+```java
+Flux.just(1)
+        .onErrorResume( e-> 
+        Mono.just(shouldDoOnError()))
+        .subscribe(
+                value -> log.info("value : {}", value)
+        );
+
+private int shouldDoOnError() {
+      log.info("shouldDoOnError");
+      return 0;
+}
+
+// value : 1
+```
+
+* error 이벤트가 발생한 상황에만 apply를 실행 하기 때문에 불필요하게 shouldDoOnError를 호출하지 않는다.
+* publisher를 받기 떄문에 Flux뿐만 아니라 Mono도 가능
+
+### onErrorComplete
+* onError 이벤트를 처리하기 위해 onComplete 이벤트로 변경
+* error 이벤트가 complete 이벤트로 변경되었기 때문에 errorConsumer가 동작하지 않는다.
+
+```java
+@Slf4j
+public class OnErrorCompleteExample {
+	public static void main(String[] args) {
+		Flux.create(sink ->{
+			sink.next(1);
+			sink.next(2);
+			sink.error(new RuntimeException("error"));
+		}).onErrorComplete()
+			.subscribe(
+				value-> log.info("value : {}", value),
+				error -> log.error("error : " , error),
+				()-> log.info("complete")
+			);
+	}
+}
+```
+
+![img_12.png](img_12.png)
+
+### onErrorResume - Flux.error
+* onErrorResume과 Flux.error (Mono.error)를 사용하면 에러를 다른 에러로 변환하여 전달 가능
+
+```java
+Flux.error(new IOException("fail to read file"))
+        .onErrorResume(e -> Flux.error(new CustomBusinessException("error")))
+        .subscribe(
+                value -> log.info("value : {}", value),
+                error -> log.error("error : " , error)
+        );
+```
+
+### onErrorMap
+* onError 이벤트를 처리하기 위해 다른 에러로 변환
+* 다른 이벤트로 변환하여 저수준의 에러를 고수준의 에러, 비즈니스 로직과 관련된 에러로 변환 가능.
+* 변환만 하기 때문에 추가적인 에러 핸들링은 여전히 필요 
+
+```java
+@Slf4j
+public class OnErrorMapExample {
+
+	private static class CustomBusinessException extends RuntimeException {
+		public CustomBusinessException(String message) {
+			super(message);
+		}
+	}
+
+	public static void main(String[] args) {
+		log.info("start main");
+		Flux.error(new IOException("fail to read file"))
+			.onErrorMap(e -> new CustomBusinessException("custom"))
+			.subscribe(
+				value -> log.info("value : {}", value),
+				error -> log.error("error : " , error)
+			);
+		log.info("end main");
+	}
+}
+```  
+  
+![img_13.png](img_13.png)
+
+### doOnError
+* 파이프라인 프름에 영향을 주지 않고 error logging만 가능.  
+  
+```java
+Flux.error(new RuntimeException("error"))
+        .doOnError(e -> log.error("error : " , e))
+        .subscribe(
+			value -> log.info("value : {}", value),
+            error -> log.error("error : " , error)
+        );
+```  
