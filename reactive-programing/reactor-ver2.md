@@ -1053,3 +1053,161 @@ public class CacheExample {
 <br />  
 
 ---
+
+
+
+## Context
+### ThreadLocal
+* 하나의 쓰레드에 값을 저장하고 해당 쓰레드 내에서 어디서든지 접근 가능.
+* 만약 subscribeOn, publishOn으로 실행 쓰레드가 달라진다면???
+
+```java
+@Slf4j
+public class UselessThreadLocalExample {
+	public static void main(String[] args) throws InterruptedException {
+		final ThreadLocal<String> threadLocal = new ThreadLocal<>();
+		threadLocal.set("hello");
+
+		Flux.create(sink -> {
+				log.info("threadLocal : {}", threadLocal.get());
+				sink.next(1);
+			})
+			.publishOn(Schedulers.parallel())
+			.map(value -> {
+				log.info("threadLocal : {}", threadLocal.get());
+				return value;
+			}).publishOn(Schedulers.boundedElastic())
+			.map(value -> {
+				log.info("threadLocal : {}", threadLocal.get());
+				return value;
+			}).subscribeOn(Schedulers.single())
+			.subscribe();
+		Thread.sleep(1000);
+	}
+}
+```
+
+![img_20.png](../resource/reactive-programing/reactor/img_20.png)
+
+### Context
+* Context는 파이프라인 내부 어디에서든 접근 가능한 key-value 저장소
+* 특정 key의 value에 접근하고 key의 value를 수정할 수 있는 수단을 제공
+* Map과 유사
+* 읽기 전용인 ContextView와 쓰기를 할 수 있는 Context로 구분
+
+### ContextWrite
+* Context를 인자로 받고 Context를 반환하는 함수형 인터페이스를 제공
+* 이를 통해서 기존의 Context에 값을 추가하거나 변경, 삭제 가능.
+* Context는 immutable 하기 때문에 각각의 작업은 새로운 context를 생성
+
+```java
+@Slf4j
+public class ContextWriteExample {
+	public static void main(String[] args) {
+		Flux.just(1)
+			.flatMap(value -> ContextLogger.logContext(value, "1"))
+			.contextWrite(context -> context.put("name", "jay"))
+			.flatMap(value -> ContextLogger.logContext(value, "2"))
+			.contextWrite(context -> context.put("name", "park"))
+			.flatMap(value -> ContextLogger.logContext(value, "3"))
+			.subscribe();
+	}
+}
+```  
+
+![img_21.png](../resource/reactive-programing/reactor/img_21.png)
+
+* subscribe 부터 시작하여 점차 위로 올라가며 contextWrite를 만나면 실행하고 새로운 context를 생성해서 위에 있는 연산자에 전달.
+* contextWrite는 subscribe부터 위로 전파.
+
+
+### Context 초기화
+* subscribe에 4번째 인자로 초기 값 전달 가능.
+* 이 경우에도 subscribe부터 위로 전파.
+
+```java
+@Slf4j
+public class ContextInitExample {
+	public static void main(String[] args) {
+		final Context initialContext = Context.of("name", "jay");
+
+		Flux.just(1)
+			.flatMap(value -> ContextLogger.logContext(value, "1"))
+			.contextWrite(context -> context.put("name", "park"))
+			.flatMap(value -> ContextLogger.logContext(value, "2"))
+			.subscribe(null, null, null, initialContext);
+	}
+}
+```
+  
+![img_22.png](../resource/reactive-programing/reactor/img_22.png)
+
+### Context read
+* source에 sink가 있다면 sink.contextView로 접근 가능.
+
+```java
+@Slf4j
+public class ContextReadFromSinkExample {
+	public static void main(String[] args) {
+		final Context initialContext = Context.of("name", "jay");
+
+		Flux.create(sink ->{
+			final String name = sink.contextView().get("name");
+			log.info("name : {}", name);
+			sink.next(1);
+		})
+			.contextWrite(context -> context.put("name", "park"))
+			.subscribe(null,null,null, initialContext);
+	}
+}
+```  
+
+![img_23.png](../resource/reactive-programing/reactor/img_23.png)
+
+### defer
+* publisher를 생성하는 Consumer를 인자로 받아서 publisher를 생성하고 
+* 생성된 publisher의 이벤트를 아래로 전달.
+* 동적으로 publisher를 생성해서 전달 가능
+
+```java
+Mono.defer(()->{
+	return Mono.just(1);
+}).subscribe(value -> log.info("value : {}", value));
+```
+
+### defer와 flatMap
+* Mono.def는 주어진 supplier를 실행해서 Mono를 구하고 해당 Mono로 이벤트를 전달
+* V라는 값이 있을때 Mono.defer(()-> Mono.just(V))를 한다면??
+  * 이는 결국 Mono.just(V)와 동일
+* flatMap(v -> Mono.defer(()->Mono.just(v)))
+  * = flatMap(v -> Mono.just(v))
+    * = map(v -> v)
+
+
+### deferContextual
+* defer와 비슷하지만 아무런 값을 전달하지 않는 Consumer가 아닌 ContextView를 인자로 받는 function을 받는다.
+* Context를 인자로 받고 생성된 publisher의 이벤트를 아래로 전달.
+
+
+### ContextRead
+* Mono.defercontextual가 ContextView를 인자로 전달하고 Mono를 반환값으로 받아서 Mono를 생성.
+  * 이렇게 생성된 Mono를 flatMap으로 처리.
+
+```java
+@Slf4j
+public class ContextReadExample {
+	public static void main(String[] args) {
+		Flux.just(1)
+			.flatMap(value -> {
+				return Mono.deferContextual(contextView -> {
+					final String name = contextView.get("name");
+					log.info("name : {}", name);
+					return Mono.just(value);
+				});
+			}).contextWrite(context -> context.put("name", "jay"))
+			.subscribe();
+	}
+}
+```
+  
+![img_24.png](../resource/reactive-programing/reactor/img_24.png)
