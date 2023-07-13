@@ -400,7 +400,7 @@ public class SingleThreadRunExample {
 
 ```  
 
-![img.png](img.png)
+![img.png](../resource/reactive-programing/reactor/img.png)
 
 
 ## Scheduler
@@ -427,7 +427,7 @@ public class ImmediateSchedulerExample {
 }
 ```  
 
-![img_1.png](img_1.png)
+![img_1.png](../resource/reactive-programing/reactor/img_1.png)
 
 ### Scheduler - Schedulers.single()
 * 캐싱된 1개 크기의 쓰레드풀을 제공
@@ -455,7 +455,7 @@ public class SingleSchedulerExample {
 
 ```
 
-![img_2.png](img_2.png)
+![img_2.png](../resource/reactive-programing/reactor/img_2.png)
 
 ### Scheduler - Schedulers.parallel()
 * 캐싱된 n개 크기의 쓰레드풀을 제공
@@ -483,7 +483,7 @@ public class ParallelSchedulerExample {
 
 ```  
 
-![img_3.png](img_3.png)
+![img_3.png](../resource/reactive-programing/reactor/img_3.png)
 
 
 ### Scheduler - Schedulers.boundedElastic()
@@ -584,7 +584,7 @@ public class PublishOnSchedulerExample {
 }
 ```  
 
-![img_4.png](img_4.png)
+![img_4.png](../resource/reactive-programing/reactor/img_4.png)
 
 ### subscribeOn
 * Scheduler를 인자로 받는다.
@@ -609,7 +609,7 @@ public class SubscribeOnSchedulerExample {
 }
 ```  
 
-![img_5.png](img_5.png)
+![img_5.png](../resource/reactive-programing/reactor/img_5.png)
 
 ## publishOn과 subscribeOn
 ```java
@@ -633,7 +633,7 @@ public class PublishOnSubscribeOnSchedulerExample {
 }
 ```  
 
-![img_6.png](img_6.png)
+![img_6.png](../resource/reactive-programing/reactor/img_6.png)
 
 <br />
 
@@ -652,7 +652,7 @@ public class PublishOnSubscribeOnSchedulerExample {
 * source나 연산자에서 에러가 발생했지만 따로 처리하지 않은 경우 기본적으로 onErrorDropped가 호출
 * onErrorDropped의 기본 구현은 에러를 출력  
 
-![img_7.png](img_7.png)
+![img_7.png](../resource/reactive-programing/reactor/img_7.png)
 
 ### 에러 핸들링이 없는 경우
 ```java
@@ -671,7 +671,7 @@ public class ErrorNoHandlerExample {
 }
 ```
 
-![img_8.png](img_8.png)
+![img_8.png](../resource/reactive-programing/reactor/img_8.png)
 
 ### errorConsumer
 * subscribe의 두번째 인자인 errorConsumer를 통해서 error를 얻고 action 수행 가능.
@@ -688,7 +688,7 @@ public class ErrorConsumerExample {
 }
 ```  
 
-![img_9.png](img_9.png)
+![img_9.png](../resource/reactive-programing/reactor/img_9.png)
 
 
 ### onErrorReturn
@@ -724,7 +724,7 @@ public class OnErrorReturnAfterExecuteExample {
 	}
 }
 ```  
-![img_10.png](img_10.png)  
+![img_10.png](../resource/reactive-programing/reactor/img_10.png)  
 
 ### onErrorResume
 * onError 이벤트를 처리하기 위해 publisher를 반환하는 추상 함수를 실행
@@ -748,7 +748,7 @@ public class OnErrorResumeExample {
 }
 ```  
 
-![img_11.png](img_11.png)
+![img_11.png](../resource/reactive-programing/reactor/img_11.png)
 
 
 ```java
@@ -792,7 +792,7 @@ public class OnErrorCompleteExample {
 }
 ```
 
-![img_12.png](img_12.png)
+![img_12.png](../resource/reactive-programing/reactor/img_12.png)
 
 ### onErrorResume - Flux.error
 * onErrorResume과 Flux.error (Mono.error)를 사용하면 에러를 다른 에러로 변환하여 전달 가능
@@ -834,7 +834,7 @@ public class OnErrorMapExample {
 }
 ```  
   
-![img_13.png](img_13.png)
+![img_13.png](../resource/reactive-programing/reactor/img_13.png)
 
 ### doOnError
 * 파이프라인 프름에 영향을 주지 않고 error logging만 가능.  
@@ -847,3 +847,209 @@ Flux.error(new RuntimeException("error"))
             error -> log.error("error : " , error)
         );
 ```  
+
+---  
+
+<br />
+
+## 결합
+### delayElements
+* 최소 delay 만큼의 간격을 두고 onNext 이벤트 발행
+* onNext 이벤트가 발행된 후 delay보다 더 늦게 다음 onNext 이벤트가 전달되며 바로 전파.
+
+```java
+@Slf4j
+public class DelayedElementsExample {
+	public static void main(String[] args) throws InterruptedException {
+		Flux.create(sink -> {
+				for (int i = 1; i <= 5; i++) {
+					try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {
+						throw new RuntimeException(e);
+					}
+					sink.next(i);
+				}
+				sink.complete();
+			})
+			.delayElements(Duration.ofMillis(500))
+			.doOnNext(value -> log.info("doOnNext : {}", value))
+			.subscribeOn(Schedulers.single())
+			.subscribe();
+		Thread.sleep(6000);
+	}
+}
+```  
+
+![img_14.png](../resource/reactive-programing/reactor/img_14.png)
+
+* 500ms 간격으로 onNext 이벤트 발행
+
+```java
+@Slf4j
+public class DelayedElementsExample {
+	public static void main(String[] args) throws InterruptedException {
+		Flux.create(sink -> {
+				for (int i = 1; i <= 5; i++) {
+					try {
+						Thread.sleep(1000);
+					} catch (InterruptedException e) {
+						throw new RuntimeException(e);
+					}
+					sink.next(i);
+				}
+				sink.complete();
+			})
+			.delayElements(Duration.ofMillis(500))
+			.doOnNext(value -> log.info("doOnNext : {}", value))
+			.subscribeOn(Schedulers.single())
+			.subscribe();
+		Thread.sleep(6000);
+	}
+}
+```  
+  
+![img_15.png](../resource/reactive-programing/reactor/img_15.png)
+
+* 1000ms 간격으로 onNext 이벤트 발행
+
+
+## concat 
+* publisher를 다른 publisher와 합치는 연산자.
+* 앞의 publisher가 onComplete 이벤트를 전달 하면 다음 publisher를 subscribe
+* 각각 publisher의 onNext 이벤트가 전파
+* 따라서 publisher의 순서가 보장.
+
+```java
+@Slf4j
+public class FluxConcatExample {
+	public static void main(String[] args) throws InterruptedException {
+		var flux1 = Flux.range(1, 3)
+			.doOnSubscribe(subscription -> log.info("subscribe flux1"))
+			.delayElements(Duration.ofMillis(100));
+		var flux2 = Flux.range(10, 3)
+			.doOnSubscribe(subscription -> log.info("subscribe flux2"))
+			.delayElements(Duration.ofMillis(100));
+
+		Flux.concat(flux1, flux2)
+			.doOnNext(value -> log.info("doOnNext : {}", value))
+			.subscribe();
+
+		Thread.sleep(1000);
+	}
+}
+```  
+
+![img_16.png](../resource/reactive-programing/reactor/img_16.png)
+
+## merge
+* publisher를 다른 Publisher와 합치는 연산자.
+* 모든 publisher를 바로 subscribe
+* 각각 publisher의 onNext 이벤트가 동시에 도달
+* publisher의 순서가 보장되지 않는다.
+
+```java
+@Slf4j
+public class FluxMergeExample {
+	public static void main(String[] args) throws InterruptedException {
+		var flux1 = Flux.range(1, 3)
+			.doOnSubscribe(subscription -> log.info("subscribe flux1"))
+			.delayElements(Duration.ofMillis(100));
+		var flux2 = Flux.range(10, 3)
+			.doOnSubscribe(subscription -> log.info("subscribe flux2"))
+			.delayElements(Duration.ofMillis(100));
+
+		Flux.merge(flux1, flux2)
+			.doOnNext(value -> log.info("doOnNext : {}", value))
+			.subscribe();
+
+		Thread.sleep(1000);
+	}
+}
+```  
+  
+![img_17.png](../resource/reactive-programing/reactor/img_17.png)
+
+## mergeSequential
+* publisher를 다른 Publisher와 합치는 연산자.
+* 모든 publisher를 바로 subscribe
+* 각각 publisher의 onNext 이벤트가 동시에 도달.
+* merge와 다르게 내부에서 재정렬하여 순서를 보장.
+
+```java
+@Slf4j
+public class FluxMergeSequentialExample {
+	public static void main(String[] args) throws InterruptedException {
+		var flux1 = Flux.range(1, 3)
+			.doOnSubscribe(subscription -> log.info("subscribe flux1"))
+			.delayElements(Duration.ofMillis(100));
+		var flux2 = Flux.range(10, 3)
+			.doOnSubscribe(subscription -> log.info("subscribe flux2"))
+			.delayElements(Duration.ofMillis(100));
+
+		Flux.mergeSequential(flux1, flux2)
+			.doOnNext(value -> log.info("doOnNext : {}", value))
+			.subscribe();
+
+		Thread.sleep(1000);
+	}
+}
+```  
+
+![img_18.png](../resource/reactive-programing/reactor/img_18.png)
+
+## etc 
+### CollectList
+* next 이벤트가 전달되면 내부에 item을 저장
+* complete 이벤트가 전달되면 저장했던 item들을 list 형태로 만들고 아래에 onNext 발행
+* 즉시 complete 이벤트 발행
+* Flux -> Mono<List>
+
+```java
+Flux.range(1, 5)
+        .collectList()
+        .doOnNext(value -> log.info("value : {}", value))
+        .subscribe();
+
+// value : [1, 2, 3, 4, 5]
+```
+
+### cache
+* 처음 subscribe에만 publisher를 실행
+* 그 이후 subscribe부터는 저장한 event 순서대로 흘려준다.
+  
+```java
+@Slf4j
+public class CacheExample {
+
+  public static void main(String[] args) {
+    Flux<Object> flux = Flux.create(sink -> {
+      for (int i = 0; i < 3; i++) {
+        log.info("next : {}", i);
+        sink.next(i);
+      }
+      log.info("complete in publisher");
+      sink.complete();
+    }).cache();
+
+    flux.subscribe(
+            value -> log.info("value : {}", value),
+            null,
+            () -> log.info("complete")
+    );
+
+    flux.subscribe(
+            value -> log.info("value : {}", value),
+            null,
+            () -> log.info("complete")
+    );
+  }
+}
+
+```  
+
+![img_19.png](../resource/reactive-programing/reactor/img_19.png)  
+
+<br />  
+
+---
