@@ -340,3 +340,53 @@ RedirectView redirect3(){
   * 현재의 경우 redirect:prefix를 이용했기 때문에 redirect view가 동작
 * RedirectView는 View를 구현했기 때문에 ViewResolutionResultHandler가 redirect
 * 단 template Engine을 사용하는 경우에는 redirect view가 동작
+
+## WebClient
+### RestTemplate
+
+![img_9.png](img_9.png)
+
+* 이전부터 사용되었던 동기 blocking 기반의 web client
+* Spring 5.0 부터 요지 모드
+* WebClient 사용을 권장.
+
+### WebClient
+* Non-blocking, reactive http 클라이언트
+* Reactor Netty, Jetty, apache의 HttpComponent를 이용해서 구현.
+* http 호출을 위한 여러 설정들을 메소드 체이닝을 통해서 설정
+
+#### WebClient 생성
+* buillder를 직접 호출하거나.
+* create를 통해서 생성 가능
+  * create 호출시 baseUrl 제공 가능
+
+#### WebClient method 
+* get, head, post, put, patch, delete, options, method 제공
+* post, put, patch의 경우 RequestBodyUriSpec을 나머지는 RequestHeadersUriSpec을 반환
+
+#### WebClient 실행
+* WebClient를 생성
+* uri, header, accept를 통해서 webClient를 설정하고
+* retrieve를 통해서 호출
+
+```java
+WebClient webClient = WebClient.create("https://localhost:8080");
+
+ResponseEntity<UserInfo> response = 
+        webClient
+          .get()
+          .uri("/user")
+          .header("X-Request-Id", "1234")
+          .accept(MediaType.APPLICATION_JSON)
+          .retrieve()
+          .toEntity(UserInfo.class)
+          .block();
+
+assert response.getBody().getId().equals("1234");
+assert response.getStatusCode().is2xxSuccessful();
+assert response.getHeaders().getContentType()
+            .toString().equals("application/json")
+assert response.getHeaders().get("X-Request-Id")
+            .get(0).equals("1234");
+```
+
