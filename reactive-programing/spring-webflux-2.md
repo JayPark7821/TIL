@@ -390,3 +390,28 @@ assert response.getHeaders().get("X-Request-Id")
             .get(0).equals("1234");
 ```
 
+## Spring Security Ractive
+### SecurityFilterChain
+* servlet stack에서는 Servlet filter를 사용
+* servlet filter에 DelegaringFilterProxy를 추가하고
+* DelegateFilterProxy는 SecurityFilterChain을 호출
+  * filterChain 내에서는 bean을 사용하기 힘들지만.
+  * securityFilterChain은 spring context를 갖기 때문에 bean에 접근 가능.
+  
+![img_10.png](img_10.png)
+
+
+### SecurityWebFilterChain
+* reactive stack에서는 HttpWebHandlerAdapter에 WebFilter를 사용
+* WebFilter를 구현한 WebFilterChainProxy는 servlet stack의 DelegatingFilterProxy와 비슷한 역할
+
+![img_11.png](img_11.png)
+
+
+### ReactiveSecurityContextHolder
+* SecurityContextHolder와 비슷하지만
+* ThreadLocal대신 context로 SecurityContext를 제공
+* getContext : SecurityContext를 Mono 형태로 제공
+* clearContext : SecurityContext를 clear
+* withSecurityContext : SecurityContext를 Mono로 받고 이를 포함하는 ReactorContext를 반환
+* withAuthentication : Security Authentication을 받고 SecurityContext를 받아서 이를 포함하는 ReactorContext를 반환
