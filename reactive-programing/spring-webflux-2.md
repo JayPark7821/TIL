@@ -415,3 +415,37 @@ assert response.getHeaders().get("X-Request-Id")
 * clearContext : SecurityContext를 clear
 * withSecurityContext : SecurityContext를 Mono로 받고 이를 포함하는 ReactorContext를 반환
 * withAuthentication : Security Authentication을 받고 SecurityContext를 받아서 이를 포함하는 ReactorContext를 반환
+
+
+### SecurityWebFilter 구현
+```java
+	@Override
+public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+    String iam = exchange.getRequest().getHeaders().getFirst("X-I-AM");
+    if (iam == null) {
+        final ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        return response.setComplete();
+    }
+    
+    final Authentication authentication = new CustomAuthentication(iam);
+            return chain.filter(exchange)
+            .contextWrite(ctx -> ReactiveSecurityContextHolder.withAuthentication(authentication));
+}
+```
+
+* 헤더를 분석하여 X-I-AM 에서 값을 추출
+* 텅 비었다면 401 status 반환
+* 그렇지 않다면 CustomAuthentication을 생성하고 ReactiveSecurityContextHolder의 withAuthentication를 통해서 SecurityContext를 주입
+
+```java
+	@GetMapping("/hello")
+	Mono<String> greet(){
+		return ReactiveSecurityContextHolder
+			.getContext()
+			.map(securityContext ->
+				securityContext.getAuthentication().getPrincipal())
+			.flatMap(principal -> Mono.just("Hello " + ((Principal)principal).getName()));
+	}
+```
+* Controller에서 ReactiveSecurityContextHolder의 getContext를 이용해서 securityContext에 접근하고 이를 이용해서 응답 생성
