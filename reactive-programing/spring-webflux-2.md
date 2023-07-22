@@ -2,7 +2,7 @@
 ## HttpHandlerAutoConfiguration
 * Spring 환경에서는 applicationContext를 이용하여 WebHttpHandlerBuilder를 build
 
-![img.png](img.png)
+![img.png](../resource/reactive-programing/spring-webflux2/img.png)
 
 * WebHttpHandlerBuilder에 기존과 다르게 applicationContext만 담고 리턴
 
@@ -11,27 +11,27 @@
 * applicationContext로부터 WebFilter class를 갖는 bean을 찾아서 order로 sort하여 filters로 등록
 * applicationContext로부터 WebExceptionHandler class를 갖는 bean을 찾아서 odder로 sort하여 exceptionHandlers로 등록
 
-![img_1.png](img_1.png)
+![img_1.png](../resource/reactive-programing/spring-webflux2/img_1.png)
 
 * WebSessionManager, ServerCodecConfigurer, LocaleContextResolver, ForwardedHeaderTransformer등 bean을 찾아내서 builder에 등록
 
-![img_2.png](img_2.png)
+![img_2.png](../resource/reactive-programing/spring-webflux2/img_2.png)
 
 
 ## DispatcherHandler bean
 * WebFluxConfigurationSupport는 autoConfiguration으로 자동으로 등록
 * DispatcherHandler가 기본 WebHandler로 등록  
 
-![img_3.png](img_3.png)
+![img_3.png](../resource/reactive-programing/spring-webflux2/img_3.png)
 
 ## DispatcherHandler
 * handlerMappings, handlerAdapters, resultHandlers로 구성
 
-![img_4.png](img_4.png)
+![img_4.png](../resource/reactive-programing/spring-webflux2/img_4.png)
 
 
 
-![img_5.png](img_5.png)
+![img_5.png](../resource/reactive-programing/spring-webflux2/img_5.png)
 
 ## HandlerMapping
 * getHandler : ServerWebExchange가 주어지면 handler를 Mono로 반환.
@@ -70,13 +70,13 @@
 * handle : ServerRequest를 인자로 받고 ServerResponse를 Mono로 반환하는 추상 메서드.
 * 요청을 처리하고 응답을 반환.
 
-![img_6.png](img_6.png)
+![img_6.png](../resource/reactive-programing/spring-webflux2/img_6.png)
 
 ### RouterFunction
 * route : ServerRequest를 인자로 받고 HandlerFunction을 Mono로 반환하는 추상 메서드.
 * path, method, predicate 등으로 handlerFunction과 연결하여 해당 요청이 들어왔을때 handlerFunction을 반환.
 
-![img_7.png](img_7.png)
+![img_7.png](../resource/reactive-programing/spring-webflux2/img_7.png)
 
 ### ServerRequest
 * RouterFunction, HandlerFunction을 지원하기 위해서 추가된 request 객체
@@ -185,7 +185,7 @@ public class RouterFunctionExample {
 
 ## RouterFunction vs Annotated Controller  
 
-![img_8.png](img_8.png)
+![img_8.png](../resource/reactive-programing/spring-webflux2/img_8.png)
 
 
 ## Method Argument
@@ -344,7 +344,7 @@ RedirectView redirect3(){
 ## WebClient
 ### RestTemplate
 
-![img_9.png](img_9.png)
+![img_9.png](../resource/reactive-programing/spring-webflux2/img_9.png)
 
 * 이전부터 사용되었던 동기 blocking 기반의 web client
 * Spring 5.0 부터 요지 모드
@@ -398,14 +398,14 @@ assert response.getHeaders().get("X-Request-Id")
   * filterChain 내에서는 bean을 사용하기 힘들지만.
   * securityFilterChain은 spring context를 갖기 때문에 bean에 접근 가능.
   
-![img_10.png](img_10.png)
+![img_10.png](../resource/reactive-programing/spring-webflux2/img_10.png)
 
 
 ### SecurityWebFilterChain
 * reactive stack에서는 HttpWebHandlerAdapter에 WebFilter를 사용
 * WebFilter를 구현한 WebFilterChainProxy는 servlet stack의 DelegatingFilterProxy와 비슷한 역할
 
-![img_11.png](img_11.png)
+![img_11.png](../resource/reactive-programing/spring-webflux2/img_11.png)
 
 
 ### ReactiveSecurityContextHolder
