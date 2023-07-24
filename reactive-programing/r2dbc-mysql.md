@@ -74,3 +74,34 @@
 * transaction savepoint를 생성
   * transaction중간에 savepoint를 만들고 rollback 가능
 * transaction을 commit하거나 rollback
+
+## R2dbc SPI ConnectionFactory
+* connection을 생성하는 factory
+* ConnectionFactoryMetadata를 통해서 ConnectionFactory의 정보를 제공
+  * ConnectionFactoryMetadata는 name을 제공
+
+## R2dbc SPI Statement
+* Statement는 Connection으로부터 createStatement 을 통해서 생성
+* bind: sql에 parameter를 bind
+* index, name 단위로 parameter를 bind
+* add:이전까지 진행한 binding을저 장하고 새로운 binding을 생성
+* execute:생성된 binding수 만큼 쿼리를 실행 하고 Publisher로 반환
+
+## R2dbc MySqlConnection
+* Connection을 구현한 MySqlConnection 
+* ConnectionMetadata을 구현한 MySqlConnectionMetadata
+* Statement를 구현한 MySqlStatement
+
+![img_4.png](img_4.png)
+
+## MySqlConnectionFactory
+* MySqlConnection을 Mono형태로 포함
+* MySqlConnectionFactoryMetadata를 반환
+* MySqlConnectionConfiguration을 인자로 받아서 MySqlConnectionFactory 생성
+
+## MySqlConnectionFactory
+* MySqlConnectionFactory로 MySqlConnection을 생성
+* MySqlConnection으로 MySqlStatement를 생성
+* MySqlConnection으로 transaction을 start, rollback, commit
+
+![img_5.png](img_5.png)
