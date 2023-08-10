@@ -105,3 +105,213 @@
 * MySqlConnection으로 transaction을 start, rollback, commit
 
 ![img_5.png](img_5.png)
+
+## MySqlConnectionConfiguration
+* MySql 연결의 설정을 포함하는 객체
+* Builder 패턴으로 쉽게 MySql 설정
+* host, port, database, username, password 등의 기본 설정 제공
+* connectTimeout, socketTimeout등의 timeout 설정
+  * 디폴트는 둘 다 timeout 제한 x
+* serverZonedId 설정
+  * 디폴트 쿼리를 보내는 서버의 zone
+
+## MySqlConnection 생성
+* MySqlConnectionConfiguration builder를 이용하여 config todtjd
+* MySqlConnectionFactory의 from static 메소드를 이용하여 connectionFactory 생성
+
+```java
+var config = MySqlConnectionConfiguration.builder()
+    .host("localhost")
+    .port(3306)
+    .database("test")
+    .username("test")
+    .password("test")
+    .build();
+
+var connectionFactory = MySqlConnectionFactory.from(config);
+```
+
+## Sql 준비
+* person table 생성
+  * name, gender, age 필드 
+* person에 새로운 row 생성
+  * parameter를 받을 수 있게 ?를 이용해서 prepared statement 생성
+* person 모든 row 조회
+
+```java
+var tableSql = "CREATE TABLE IF NOT EXISTS person " 
+        + "(id INT AUTO_INCREMENT PRIMARY KEY, " 
+        + "name VARCHAR(255)," 
+        + "gender VARCHAR(10), " 
+        + "age INT)";
+
+var insertSql = "INSERT INTO person(name, age, gender) VALUES(?name, ?age, ?gender)";
+
+var selectSql = "SELECT * FROM person";
+```
+
+## Sql 실행
+* connectionFactory의 create를 통해서 connection에 접근
+* connection의 createStatement를 통해서 sql wnsql
+* thenMany Chaining을 통해서 순차적으로 실행하고 selectPeople의 결과를 아래로 전달
+* result의 map으로 row에 접근하고 Person으로 변환
+
+```java
+connectionFatory.create().flatMapMany(conn ->{
+	Flux<MySqlResult> createTable = conn.createStatement(tableSql).execute();
+	Flux<MySqlResult> insert = conn.createStatement(insertSql)
+        .bind("name", "test")
+        .bind("age", 10)
+        .bind("gender", "M")
+        .add()
+        .bind("name", "test2")
+        .bind("age", 20)
+        .bind("gender", "F")
+        .execute();
+	Flux<MySqlResult> selectPeople = conn.createStatement(selectSql).execute();
+	
+	return createTable.thenMany(insert).thenMany(selectPeople);
+}).flatMap(result ->{
+	return result.map((row, rowMetadata) ->{
+		Long id = row.get("id", Long.class);
+		String name = row.get("name", String.class);
+		Integer age = row.get("age", Integer.class);
+		String gender = row.get("gender", String.class);
+		return new Person(id, name, age, gender)
+        });
+}).subscribe(person -> log.info("person: {}", person));
+```
+
+## MySqlConnection의 한계
+* SQL 쿼리를 명시적으로 전달.
+  * 개발 편의성이 떨어지고 SQL 쿼리를 재사용할 수 없다.
+* 반환된 결과를 수동으로 파싱
+  * 별도의 mapper를 만들어야 하고 확장성이 떨어진다.
+  
+## Transaction 실행
+* connection의 beginTransaction과 commitTransaction으로 transaction 시작과 commit 수행
+* onErrorResume으로 exception이 발생하면 rollbackTransaction 수행
+
+
+```java
+connectionFatory.create().flatMapMany(conn ->{
+	Flux<MySqlResult> createTable = conn.createStatement(tableSql).execute();
+	Flux<MySqlResult> insert = conn.createStatement(insertSql)
+        .bind("name", "test")
+        .bind("age", 10)
+        .bind("gender", "M") 
+        .execute();
+	Flux<MySqlResult> selectPeople = conn.createStatement(selectSql).execute();
+	
+	return createTable
+        .then(conn.beginTransaction())
+        .thenMany(insert)
+        .thenMany(selectPeople)
+        .then(conn.commitTransaction())
+        .onErrorResume(e -> conn.rollbackTransaction());
+}).subscribe();
+```
+
+
+---   
+
+---
+
+# Spring data R2dbc
+## R2dbcEntityTemplate
+* R2dbcEntityTemplate은 Spring data r2dbc의 추상화 클래스
+* SQL 쿼리들을 문자열 형태로 넘기거나 결과를 직접 처리하지 않아도 
+* 메소드 체이닝을 통해서 쿼리를 수행하고 결과를 entity 객체로 받을 수 있다.
+* R2dbcEntityOperations를 구현
+
+![img_6.png](img_6.png)
+
+## R2dbcEntityOperations
+* DatabaseClient와 R2dbcConverter를 제공
+  * DatabaseClient:
+    * connectionFactory를 wrapping하여 결과를 Map이나 integer로 반환
+  * R2dbcConverter:
+    * 주어진 Row를 entity로 만드는 Converter
+* R2dbcEntityTemplate에서는 이 databaseClient와 R2dbcConverter를 이용해서 쿼리를 수행하고 결과를 entity로 반환
+
+## DatabaseClient 실행
+* sql을 실행해서 GenericExecuteSpec을 반환
+* GenericExecuteSpec에 bind를 한 후 
+* fetch를 호출하여 FetchSpec을 반환
+* rowsUpdated를 호출하여 영향을 받은 Row수 조회
+* 혹은 all을 호출하여 결과 row 조회
+* 여전히 직접 mapping
+
+```java
+var createTableMono = client.sql(tableSql).fetch().rowsUpdated();
+
+var insertMono = client.sql(insertSql)
+        .bind("name", "test")
+        .bind("age", 10)
+        .bind("gender","M")
+        .fetch()
+        .rowsUpdated();
+
+var selectAllFlux = client.sql(selectSql)
+        .fetch()
+        .all();
+
+createTableMono.then(insertMono)
+        .thenMany(selectAllFlux)
+        .doOnNext(result ->{
+			var id = (Integer) result.get("id");
+			var name = (String) result.get("name");
+			var age = (Integer) result.get("age");
+			var gender = (String) result.get("gender");
+			log.info("id: {}, name: {}, age: {}, gender: {}",
+                    id, name, age, gender);
+        })
+        .subscribe();
+```
+
+## ReadConverter
+* Row를 source로 Entity를 target으로 하는 converter
+* Row로부터 name 혹은 index로 column에 접근할 수 있고 변환하고자 하는 type을 class로 전달.
+
+```java
+@ReadingConverter
+public class PersonReadConverter implements Converter<Row, Person>{
+	
+	@Override
+    public Person convert(Row source) {
+		var id = source.get("id", Integer.class);
+		var name = source.get("name", String.class);
+		var age = source.get("age", Integer.class);
+		var gender = source.get("gender", String.class);
+
+      return new Person(id, name, age, gender);
+    }
+}
+```
+
+## WriteConverter
+* Entity를 source로 Row를 target으로 하는 converter
+* outboundRow에 값을 추가.
+* key에는 column의 이름, value에는 Parameter.from을 이용해서 entity의 속성을 전달.
+* DefaultDatabaseClient에서 OutboundRow를 이용해서 SQL 생성
+
+```java
+
+@WritingConverter
+public class PersonWriteConverter implements Converter<Person, OutboundRow> {
+	
+	@Override
+    public OutboundRow convert(Person source) {
+		var row = new OutboundRow();
+        row.put("id", Parameter.from(source.getId()));
+		row.put("name", Parameter.from(source.getName()));
+		row.put("age", Parameter.from(source.getAge()));
+		row.put("gender", Parameter.from(source.getGender()));
+        return row;
+	}
+}
+```
+
+## CustomConverter 등록
+* AbstractR2dbcConfiguration을 상속하는 Configuration 생성
+* AbstractR2dbcConfiguration의 getCustomConverters에 custom converter들을 list 형태로 제공
