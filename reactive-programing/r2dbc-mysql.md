@@ -315,3 +315,120 @@ public class PersonWriteConverter implements Converter<Person, OutboundRow> {
 ## CustomConverter 등록
 * AbstractR2dbcConfiguration을 상속하는 Configuration 생성
 * AbstractR2dbcConfiguration의 getCustomConverters에 custom converter들을 list 형태로 제공
+
+
+## ReactiveSelectOperation
+
+```java
+var r2dbcEntityTemplate = new R2dbcEntityTemplate(connectionFactory);
+
+var query = Query.query(
+	Criteria.where("name").is("test"));
+
+r2dbcEntityTemplate.select(PersonEntity.class)
+        .from("person")
+        .as(PersonNameOnly.class )
+        .matching(query)
+        .first()
+        .doOnNext(person -> log.info("person: {}", person))
+        .subscribe();
+
+public record PersonNameOnly(
+	String name
+) {
+}
+```
+* ConnectionFactory를 이용해 R2dbcEntityTemplate 생성
+* Query와 Criteria를 이용해 query 생성
+* PersonNameOnly class를 이용해서 name만 projection
+
+## ReactiveInsertOperation
+
+```java
+var r2dbcEntityTemplate = new R2dbcEntityTemplate(connectionFactory);
+
+var newPerson = new PersonEntity(null, "jay", 20, "M");
+
+r2dbcEntityTemplate.insert(PersonEntity.class)
+        .into("person")
+        .using(newPerson)
+        .doOnNext(person -> log.info("person: {}", person))
+        .subscribe();
+```
+* into를 통해서 insert할 table 명시
+* entity를 생성해서 using에 전달.
+
+## ReactiveUpdateOperation
+```java
+var r2dbcEntityTemplate = new R2dbcEntityTemplate(connectionFactory);
+
+var query = Query.query(
+	Criteria.where("name").is("test"));
+
+var update = Update.update("name", "test2");
+
+r2dbcEntityTemplate.update(PersonEntity.class)
+        .inTable("person")
+        .matching(query)
+        .apply(update)
+        .doOnNext(person -> log.info("person: {}", person))
+        .subscribe();
+```
+
+* inTable을 통해서 update할 table 명시
+* matching으로 update 영향을 받는 Row 제한
+* update를 생성해서 apply에 전달.
+
+
+## ReactiveDeleteOperation
+```java
+var r2dbcEntityTemplate = new R2dbcEntityTemplate(connectionFactory);
+
+var query = Query.query(
+	Criteria.where("name").is("test"));
+ 
+r2dbcEntityTemplate.update(PersonEntity.class)
+        .from("person")
+        .matching(query)
+        .all()
+        .doOnNext(person -> log.info("person: {}", person))
+        .subscribe(); 
+```
+
+* from을 통해서 delete할 table 명시
+* matching으로 delete 영향을 받는 Row 제한
+* all을 실행하여 결과 출력
+
+## R2dbcRepository  
+![img_7.png](img_7.png)
+
+## R2dbcRepository 등록
+* R2dbcRepositoriesAutoConfiguration이 활성화되어 있다면 SpringBootApplication기준으로 자동 scan
+* 혹은 EnableR2dbcRepositories를 통해서 repository scan
+  * 만약 여러 r2dbcEntityTemplate이 존재하거나 여러 데이터베이스를 사용하는 경우, basePackages, entityOperationRef등을 통해서 다른 경로, 다른 entityTemplate 설정 가능
+
+### R2dbcRepository 한계
+* R2dbcRepository는 기본적으로 CRUD를 수행할 수 있는 메소드를 제공
+  * 모두 혹은 id기반으로 CRUD 제공
+  * 특정 필드로 탐색을 하거나 상위 n개만 조회 등의 기능은 제공되지 않는다.
+* join이나 집계와 관련된 함수들은 제공되지 않는다.
+
+## Transactional Operator
+* transactional 메소드를 통해서 주어진 Flux혹은 Mono를 transactional안에서 실행
+
+![img_8.png](img_8.png)
+
+```java
+public Flux<PersonEntity> savePerson(){
+	var person = new PersonEntity(null, "test", 10, "M");
+	
+	var jobs = personRepository.save(person)
+        .flatMap(savedPerson->{
+			var personToUpdate = savedPerson.withAge(10)
+            return personRepository.save(personToUpdate);
+        }).thenMay(personRepository.findAll());
+	
+	return transactionalOperator.execute(status -> jobs);
+	return transactionalOperator.transactional(jobs);
+}
+```
