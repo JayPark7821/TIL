@@ -20,11 +20,11 @@
 * JPA 또한 jdbc 기반이기 때문에 비동기 non-blocking 지원 불가능
 * ->비동기 non-blocking 기반의 API,드라이 버를 새로 만들자!
 
-![img.png](img.png)
+![img.png](../resource/reactive-programing/r2dbc/img.png)
 
 ## spring data r2dbc 스택 
 
-![img_1.png](img_1.png)
+![img_1.png](../resource/reactive-programing/r2dbc/img_1.png)
 
 ## R2dbc
 * Reactive Relational Database Connectivity
@@ -51,7 +51,7 @@
 * Reactor Netty client로 성능과 확장성 모두 제공
 * r2dbc-spi스펙을 구현하여 여러 데이터베이스 시스템과 호환
 
-![img_2.png](img_2.png)
+![img_2.png](../resource/reactive-programing/r2dbc/img_2.png)
 
 ## R2dbc SPI
 * R2dbc Service Provider Interface
@@ -60,7 +60,7 @@
 * Result, Row, RowMetadata 등 result 스펙
 * Statement등 statment스펙
 
-![img_3.png](img_3.png)
+![img_3.png](../resource/reactive-programing/r2dbc/img_3.png)
 
 ## R2dbc SPI Connection
 * 데이터베이스에 대한 연결을 가리킨다 
@@ -92,7 +92,7 @@
 * ConnectionMetadata을 구현한 MySqlConnectionMetadata
 * Statement를 구현한 MySqlStatement
 
-![img_4.png](img_4.png)
+![img_4.png](../resource/reactive-programing/r2dbc/img_4.png)
 
 ## MySqlConnectionFactory
 * MySqlConnection을 Mono형태로 포함
@@ -104,7 +104,7 @@
 * MySqlConnection으로 MySqlStatement를 생성
 * MySqlConnection으로 transaction을 start, rollback, commit
 
-![img_5.png](img_5.png)
+![img_5.png](../resource/reactive-programing/r2dbc/img_5.png)
 
 ## MySqlConnectionConfiguration
 * MySql 연결의 설정을 포함하는 객체
@@ -224,7 +224,7 @@ connectionFatory.create().flatMapMany(conn ->{
 * 메소드 체이닝을 통해서 쿼리를 수행하고 결과를 entity 객체로 받을 수 있다.
 * R2dbcEntityOperations를 구현
 
-![img_6.png](img_6.png)
+![img_6.png](../resource/reactive-programing/r2dbc/img_6.png)
 
 ## R2dbcEntityOperations
 * DatabaseClient와 R2dbcConverter를 제공
@@ -400,7 +400,7 @@ r2dbcEntityTemplate.update(PersonEntity.class)
 * all을 실행하여 결과 출력
 
 ## R2dbcRepository  
-![img_7.png](img_7.png)
+![img_7.png](../resource/reactive-programing/r2dbc/img_7.png)
 
 ## R2dbcRepository 등록
 * R2dbcRepositoriesAutoConfiguration이 활성화되어 있다면 SpringBootApplication기준으로 자동 scan
@@ -416,7 +416,7 @@ r2dbcEntityTemplate.update(PersonEntity.class)
 ## Transactional Operator
 * transactional 메소드를 통해서 주어진 Flux혹은 Mono를 transactional안에서 실행
 
-![img_8.png](img_8.png)
+![img_8.png](../resource/reactive-programing/r2dbc/img_8.png)
 
 ```java
 public Flux<PersonEntity> savePerson(){
