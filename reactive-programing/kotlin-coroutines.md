@@ -523,3 +523,476 @@ fun main(){
 }
 ```
 
+---
+
+### 동기, 비동기, Coroutine 비교
+#### 주문 생성 동기
+* 구매자의 userId와 구매하려는 상품들의 id가 주어졌을때
+* userId로 고객 정보를 조회하고
+* 상품 id로 상품 정보를 조회한 후
+* 상품 정보로 스토어 정보를 조회하고
+* 고객 정보로 주소를 조회하고 
+* 이 모든 값으로 주문 생성
+
+```kotlin
+fun execute(userId: Long, productIds: List<Long>): Order {
+    // 1. 고객 정보 조회
+    val customer = customerService.findCustomerById(userId)
+    
+    // 2. 상품 정보 조회
+    val products = productService.findAllProductsByIds(productIds)
+  
+    // 3. 스토어 조회
+    val storeIds = products.map{it.storeId} 
+    val stores = storeService.findStoresByIds(storeIds)
+  
+    // 4. 주소 조회
+    val daIds = customer.deliveryAddressIds
+    val deliveryAddress = deliveryAddressService
+                            .findDeliveryAddress(daIds)
+                            .first()
+  
+    // 5. 주문 생성
+    val order = OrderService.createOrder(customer, products, deliveryAddress, stores)
+  
+    return order
+}
+```
+```kotlin
+fun main(args: Array<String>){
+    val customerService = CustomBlockingService()
+    val productService = ProductBlockingService()
+    val storeService = StoreBlockingService()
+    val deliveryAddressService = DeliveryAddressBlockingService()
+    val orderService = OrderBlockingService()
+  
+    val example = OrderBlockingExample(
+        customerService = customerService,
+        productService = productService,
+        storeService = storeService,
+        deliveryAddressService = deliveryAddressService,
+        orderService = orderService,
+    )
+    
+    val order = example.execute(1, listOf(1, 2, 3))
+    log.info("order: {}", order)
+}
+```
+
+#### 주문생성 비동기
+* CustomerFutureService: 유저 id로 고객 정보를 찾고 java8의 CompletableFuture로 반환
+```kotlin
+import java.util.concurrent.CompletableFuture
+
+class CustomFutureService{
+    fun findCustomerFuture(id: Long): CompletableFuture<Customer>{
+        return CompletableFuture.supplyAsync{
+            Thread.sleep(1000)
+            Customer(id, "jay", listOf(1,2,3))
+        }
+    }
+}
+```
+* ProductRxjava3Service: 상품 id 목록을 받고 상품들을 찾아서 rxjava3의 Flowable로 반환
+```kotlin
+class ProductRxjava3Service {
+    fun findAllProductsFlowable(
+        ids: List<Long>
+    ): Flowable<Product> {
+        return Flowable.create({ emitter ->
+            ids.forEach {
+                Thread.sleep(1000)
+                val p = Product(it, "product-$it", 1000L + it)
+                emitter.onNext(p)
+            }
+            emitter.onComplete()
+        }, BackpressureStrategy.BUFFER)
+    }
+}
+```
+* StoreMutinyService: 스토어 id 목록을 받고 해당하는 스토어 목록을 mutiny의 Multi로 반환
+```kotlin
+class StoreMutinyService {
+    fun findStoresMulti(storeIds: List<Long>): Multi<Store> {
+        return Multi.createFrom().emitter{
+            storeIds.map{id ->
+                Store(id, "store-$id")
+            }.forEach { store ->
+                Thread.sleep(1000)
+                it.emit(store)
+            }
+          it.complete()
+        }
+    }
+}
+```
+* DeliveryAddressPublisherService: 주소 id 목록을 받고 주소를 찾아서 reactive stream의 Publisher로 반환
+```kotlin
+class DeliveryAddressPublisherService{
+    fun findDeliveryAddressesPublisher(
+        ids: List<Long>
+    ): Publisher<DeliveryAddress>{
+        return Flux.create { sink ->
+            ids.map { id -> 
+                DeliveryAddress(
+                    id =id,
+                    roadNameAddress = "도로명 주소 $id",
+                    detailAddress = "상세 주소 $id"
+                )
+            }.forEach{
+                Thread.sleep(1000)
+                sink.next(it)
+            }
+            sink.complete()
+        }
+    }
+}
+```
+
+* OrderReactorService: customer, products, deliveryAddress, stores등을 인자로 받고 이를 기반으로 Order를 생성하여 Mono로 반환
+```kotlin
+class OrderReactorService{
+    fun createOrderMono(
+        customer: Customer,
+        products: List<Product>,
+        deliveryAddress: DeliveryAddress,
+        stores: List<Store>
+    ): Mono<Order>{
+        return Mono.create {sink ->
+            Thread.sleep(1000)
+            sink.success(
+                Order(
+                    stores = stores,
+                    products = products,
+                    customer = customer,
+                    deliveryAddress = deliveryAddress,
+                )
+            )
+        }
+    }
+}
+```
+
+```kotlin
+fun execute(userId: Long, productIds: List<Long>) {
+    //1.고객 정보 조회 
+    customerService.findCustomerFuture(userId).thenAccept { customer ->
+        //2.상품 정보 조회 
+        productService.findAllProductsFlowable(productIds)
+            .toList()
+            .subscribe { products ->
+                // 3. 스토어 조회
+                val storeIds = products.map { it.storeId }
+                storeService.findStoresMutli(storeIds)
+                    .collect().asList()
+                    .subscribe()
+                    .with { stores ->
+                        // 4. 주소 조회
+                        val daIds = customer.deliveryAddressIds
+                        deliveryAddressService.findDeliveryAddressesPublisher(daIds)
+                            .subscribe(FirstFinder { deliveryAddress ->
+                                // 5. 주문 생성 
+                                orderService.createOrderMono(
+                                    customer, products, deliveryAddress, stores,
+                                ).subscribe { order ->
+                                    log.info("order: {}", order)
+                                }
+                            })
+                    }
+            }
+    }
+}
+```
+* subscribe hell....
+
+### 위 비동기 코드에 FSM 적용
+* Shared 클래스 생성
+```kotlin
+class Shared {
+    var result: Any? = null
+    var label = 0
+  
+    lateinit var customer: Customer
+    lateinit var products: List<Product>
+    lateinit var stores: List<Store>
+    lateinit var deliveryAddress: DeliveryAddress
+}
+```
+* shared를 인자로 받고 기본 값으로 null을 제공
+* main에서 최초로 실행하는 경우 null이 전달되기 때문에 Shared 객체 생성
+```kotlin
+fun execute(
+    userId: Long,
+    productIds: List<Long>,
+    shared: Shared? = null
+){
+    val con = shared?: Shared()
+}
+```
+```kotlin
+fun main(args: Array<String>){
+    val customerService = CustomerFutureService()
+    val productService = ProductRxjava3Service()
+    val storeService = StoreMutinyService()
+    val deliveryAddressService = DeliveryAddressPublisherService()
+    val orderService = OrderReactorService()
+  
+    val example = OrderReactorExample(
+        customerService = customerService,
+        productService = productService,
+        storeService = storeService,
+        deliveryAddressService = deliveryAddressService,
+        orderService = orderService,
+    )
+  
+    example.execute(1, listOf(1, 2, 3))
+}
+```
+
+* Shared의 label 값에 따라서 다른 case문이 실행
+* case 문에서는 label을 변경하고 
+* 이전에 시행됐던 결과를 shared 내부의 중간값에 저장
+
+```kotlin
+when (cont.label) {
+    0 -> {
+        //1.고객 정보 조회 
+        cont.label = 1
+        ...
+    }
+    1 -> {
+        //2.상품 정보 조회
+        cont.customer = cont.result as Customer
+        cont.label = 2
+        ...
+    }
+    2 -> {
+        // 3. 스토어 조회
+        cont.products = cont.result as List<Product>
+        cont.label = 3
+        ...
+    }
+    3 -> {
+        // 4. 주소 조회
+        cont.stores = cont.result as List<Store>
+        cont.label = 4
+        ...
+    }
+    4 -> {
+        // 5. 주문 생성
+        cont.deliveryAddress = cont.result as DeliveryAddress
+        cont.label = 5
+        ...
+    }
+    5 -> {
+        val order = cont.result as Order
+        log.info("order: {}", order)
+    }
+
+}
+```
+
+* findCustomerFuture의 thenAccept가 실행 된 후 customer를 구하고 cont.result에 값을 저장 후 재귀 호출
+* label이 1로 바뀐 후 재귀 호출이 발생했기 때문에 1번 케이스로
+* cont.result의 값을 cont.customer로 옮기고
+* findAllProductsFlowable에서 products를 구하고 cont.result에 값을 저장한 후 재귀 호출
+
+```kotlin
+when (cont.label) {
+    0 -> {
+        //1.고객 정보 조회 
+        cont.label = 1
+
+        customerService.findCustomerFuture(userId)
+            .thenAccept { customer ->
+                cont.result = customer
+                execute(userId, productIds, cont)
+            }
+
+    }
+    1 -> {
+        //2.상품 정보 조회
+        cont.customer = cont.result as Customer
+        cont.label = 2
+
+        productService.findAllProductsFlowable(productIds)
+            .toList()
+            .subscribe { products ->
+                cont.result = products
+                execute(userId, productIds, cont)
+            }
+    }
+    2 -> {
+        // 3. 스토어 조회
+        cont.products = cont.result as List<Product>
+        cont.label = 3
+        
+        val products = cont.products
+        val storeIds = products.map { it.storeId }
+        storeService.findStoresMutli(storeIds)
+              .collect().asList()
+              .subscribe()
+              .with { stores ->
+                  cont.result = stores
+                  execute(userId, productIds, cont)
+              }
+    }
+    3 -> {
+        // 4. 주소 조회
+        cont.stores = cont.result as List<Store>
+        cont.label = 4
+        
+        val customer = cont.customer
+        val daIds = customer.deliveryAddressIds
+        deliveryAddressService.findDeliveryAddressesPublisher(daIds)
+            .subscribe(FirstFinder { deliveryAddress ->
+                cont.result = deliveryAddress
+                execute(userId, productIds, cont)
+            })
+    }
+    4 -> {
+        // 5. 주문 생성
+        cont.deliveryAddress = cont.result as DeliveryAddress
+        cont.label = 5
+        
+        val customer = cont.customer
+        val products = cont.products
+        val deliveryAddress = cont.deliveryAddress
+        val stores = cont.stores
+      
+        orderService.createOrderMono(
+            customer, products, deliveryAddress, stores,
+        ).subscribe { order ->
+            cont.result = order
+            execute(userId, productIds, cont)
+        }
+    }
+    5 -> {
+      val order = cont.result as Order
+      log.info("order: {}", order)
+    }
+} 
+```
+
+### FSM 기반에서 문제점
+* cont.result에 값을 넣고 재귀 함수를 실행하는 부분이 반복적으로 발생
+* 재귀 함수를 직접 호출하기 때문에 외부로 분리하기 힘들다.
+* main 함수에서는 Shared를 생성하지 않기 때문에 결과를 출력하는 부분이 하드 코딩되어 있다.
+-> Continuation을 전달하는 형태로 변경
+
+### CPS 적용하기 
+* Shared 객체를 CustomContinuation 객체로 변경
+* CustomContinuation은 main으로부터 Continuation을 받는다 (이하 completion)
+* 중간값들 뿐만 아니라 arguments와 instance 까지 Continuation에 저장
+* context와 resumeWith을 override
+* resumeWith에서는 this.result를 갱신하고 that(instance)의 execute를 호출
+* 가장 마지막 state에서 complete를 호출하여 completion 호출
+
+```kotlin
+import kotlin.coroutines.Continuation
+
+private class CustomContinuation(
+    private val completion: Continuation<Any>,
+) : Continuation<Any> {
+    var result: Any? = null
+    var label = 0
+
+    // arguments and instance
+    lateinit var that: OrderAsyncExample
+    var userId by Delegates.notnull<Long>()
+    lateinit var productIds: List<Long>
+
+    // variables
+    lateinit var customer: Customer
+    lateinit var products: List<Product>
+    lateinit var stores: List<Store>
+    lateinit var deliveryAddress: DeliveryAddress
+
+    override val context: CoroutineContext
+        get() = completion.context
+
+    override fun resumeWith(result: Result<Any>) {
+        this.result = result.getOrThrow()()
+        that.execute(0, emptyList(), this)
+    }
+
+    fun complete(value: Any) {
+        completion.resume(value)
+    }   
+}
+```
+
+```kotlin
+
+import java.beans.Customizerimport kotlin.coroutines.Continuation
+
+fun execute(
+  userId: Long,
+  productIds: List<Long>,
+  continuation: Continuation<Any>
+){
+    val cont = if(continuation is CustomContinuation){
+        continuation
+    }else{
+        CustomContinuation(continuation).apply {
+            that = this@OrderAsyncExample
+            this.userId = userId
+            this.productIds = productIds
+        }
+    }
+}
+```
+
+```kotlin
+fun main(args: Array<String>){
+    ...
+  val cont = Continuation<Any>(EmptyCoroutineContext) {
+    log.info("order: {}", order)
+  }
+  
+  example.execute(1, listOf(1, 2, 3), cont)
+  Thread.sleep(1000)
+}
+```
+
+```kotlin
+ 
+when (cont.label) {
+    0 -> {
+        //1.고객 정보 조회 
+        cont.label = 1
+
+        customerService.findCustomerFuture(userId)
+            .thenAccept(cont::resumeWith)
+
+    }
+    1 -> {
+        //2.상품 정보 조회
+        cont.customer = cont.result as Customer
+        cont.label = 2
+
+        productService.findAllProductsFlowable(productIds)
+            .toList()
+            .subscribe(cont::resumeWith)
+    }
+}
+```
+
+```kotlin
+override fun resumeWith(result: Result<Any>) {
+    this.result = result.getOrThrow()
+    that.execute(0, emptyList(), this)
+}
+```
+
+---
+## 정리
+* Kotlin complier는 suspend가 붙은 함수에 Continuation 인자를 추가.
+* 다른 suspend 함수를 실행하면 소유하고 있는 Continuation을 전달
+  * 이러한 변환으로 인해서 suspend가 없는 함수에서 다른 suspend 함수 호출 불가
+  * 전달할 Continuation이 없기 때문
+* suspend 함수 내부를 when문을 이용해서 FSM 상태로 변경
+* 각각 state에서는 label을 변경하고 비동기 함수를 수행
+* 비동기 함수가 완료되면 continuation.resume을 수행하여 다시 복귀
+* 하지만 label이 변경되면서 다른 state로 transition
+* 마지막 state에 도달하면 completion.resume을 수행하고 종료
