@@ -996,3 +996,159 @@ override fun resumeWith(result: Result<Any>) {
 * 비동기 함수가 완료되면 continuation.resume을 수행하여 다시 복귀
 * 하지만 label이 변경되면서 다른 state로 transition
 * 마지막 state에 도달하면 completion.resume을 수행하고 종료
+
+## Coroutine 사용하기
+* Suspend 함수는 suspend 함수나 coroutine내부가 아니라면 실행 불가.
+* Controller 내부에서 suspend 함수를 호출해야 한다면?
+* 혹은 변경 불가능한 interface가 Mono나 CompletableFuture를 반환하고 suspend 함수가 아니라면???
+
+### Controller suspend 함수 지원
+* spring webflux는 suspend 함수를 지원
+* context1, MonoCoroutine, Dispatchers.Unconfined를 context로 갖고 
+* reactor-http-nio-2 스레드에서 실행
+
+```kotlin
+@RestController
+@RequestMapping("/greet")
+class GreetController{
+    private suspend fun greet(name: String): String{
+        return "Hello $name"
+    }
+  
+  @GetMapping("/{name}")
+  suspend fun greet(@PathVariable name: String): String{
+    return greet(name)
+  }
+}
+```
+
+## Controller suspend 함수 지원
+* RequestMappingHandlerAdapter 가 handlerMethod를 실행
+* handlerMethod는 invocableMethod를 획득하고 invoke를 통해 실행    
+
+![img.png](img.png)  
+
+* 주어진 method가 suspend 함수인지 확인
+* suspend 함수가 맞다면 CoroutineUtils.invokeSuspendingFunction을 실행
+* 아니면 method.invoke를 실행
+
+![img_1.png](img_1.png)
+
+* kotlin의 mono를 실행
+![img_2.png](img_2.png)
+
+## mono로 반환
+* 외부 라이브러리에서 제공되는 인터페이스가 Mono를 반환하는 경우
+* 이미 많이 사용되어서 suspend 함수로 변경이 불가능한 경우
+* Mono를 반환하는 함수 내부에서 어떻게 suspend 함수를 호출할 수 있을까?
+
+```kotlin
+interface GreetMonoService{
+    fun greet(name: String): Mono<String>
+}
+```
+
+```kotlin
+class GreetMonoServiceImpl: GreetMonoService{
+    private suspend fun greeting(): String{
+        delay(1000)
+      return "Hello"
+    }
+  
+    override fun greet(name: String): Mono<String> {
+        TODO()
+    }
+}
+```
+
+---
+
+![img_3.png](img_3.png)  
+* kotlin-coroutines-reactor에서 mono함수를 제공
+* mono 함수를 이용해서 내부에서 suspend 함수를 실행
+* mono 함수의 결과값은 Mono이기 때문에 그대로 반환.
+
+```kotlin
+class GreetMonoServiceImpl: GreetMonoService{
+    private suspend fun greeting(): String{
+        delay(1000)
+      return "Hello"
+    }
+  
+    override fun greet(name: String): Mono<String> {
+        return mono {
+            greeting()
+        }
+    }
+}
+```
+
+## 그럼 monoInternal 함수는 어떻게 Mono를 반환할까?  
+![img_4.png](img_4.png)
+* monointernal에서 sink로 부터 ReactorContext를 추출
+* 추출한 ReactorContext로 CoroutineContext를 생성
+* MonoCoroutine을 생성하고 시작
+
+![img_5.png](img_5.png)
+* MonoCoroutine은 sink를 인자로 받고
+* Coroutine이 complete되면 sink.success를 호출
+* cancel되면 sink.error를 호출
+
+--- 
+
+## CompletableFuture로 반환
+* CompletableFuture를 반환하는 함수에서 suspend 함수를 사용해야 한다면??
+
+```kotlin
+interface GreetCompletableFutureService{
+    fun greet(name: String): CompletableFuture<String>
+}
+```
+
+```kotlin
+class GreetCompletableFutureServiceImpl: GreetCompletableFutureService{
+    private suspend fun greeting(): String{
+        delay(1000)
+      return "Hello"
+    }
+  
+    override fun greet(name: String): CompletableFuture<String> {
+        TODO()
+    }
+}
+```
+
+* CoroutineScope를 생성
+* 해당 CoroutineScope에서 future를 실행하여 suspend 함수를 실행
+* 결과를 CompletableFuture로 반환
+
+```kotlin
+class GreetCompletableFutureServiceImpl: GreetCompletableFutureService{
+    private suspend fun greeting(): String{
+        delay(1000)
+      return "Hello"
+    }
+  
+    override fun greet(name: String): CompletableFuture<String> {
+        return CoroutineScope(Dispatchers.IO).future {
+            greeting()
+        }
+    }
+}
+```
+
+## Unit으로 반환
+```kotlin
+class GreetCompletableFutureServiceImpl: GreetCompletableFutureService{
+    private suspend fun greeting(): String{
+        delay(1000)
+      return "Hello"
+    }
+  
+    override fun greet(name: String): CompletableFuture<String> {
+        return CoroutineScope(Dispatchers.IO).launch {
+            greeting()
+        }
+    }
+}
+```
