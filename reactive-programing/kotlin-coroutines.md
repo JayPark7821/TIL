@@ -1026,16 +1026,16 @@ class GreetController{
 * RequestMappingHandlerAdapter 가 handlerMethod를 실행
 * handlerMethod는 invocableMethod를 획득하고 invoke를 통해 실행    
 
-![img.png](img.png)  
+![img.png](../resource/reactive-programing/coroutine/basic/img.png)  
 
 * 주어진 method가 suspend 함수인지 확인
 * suspend 함수가 맞다면 CoroutineUtils.invokeSuspendingFunction을 실행
 * 아니면 method.invoke를 실행
 
-![img_1.png](img_1.png)
+![img_1.png](../resource/reactive-programing/coroutine/basic/img_1.png)
 
 * kotlin의 mono를 실행
-![img_2.png](img_2.png)
+![img_2.png](../resource/reactive-programing/coroutine/basic/img_2.png)
 
 ## mono로 반환
 * 외부 라이브러리에서 제공되는 인터페이스가 Mono를 반환하는 경우
@@ -1063,7 +1063,7 @@ class GreetMonoServiceImpl: GreetMonoService{
 
 ---
 
-![img_3.png](img_3.png)  
+![img_3.png](../resource/reactive-programing/coroutine/basic/img_3.png)  
 * kotlin-coroutines-reactor에서 mono함수를 제공
 * mono 함수를 이용해서 내부에서 suspend 함수를 실행
 * mono 함수의 결과값은 Mono이기 때문에 그대로 반환.
@@ -1084,12 +1084,12 @@ class GreetMonoServiceImpl: GreetMonoService{
 ```
 
 ## 그럼 monoInternal 함수는 어떻게 Mono를 반환할까?  
-![img_4.png](img_4.png)
+![img_4.png](../resource/reactive-programing/coroutine/basic/img_4.png)
 * monointernal에서 sink로 부터 ReactorContext를 추출
 * 추출한 ReactorContext로 CoroutineContext를 생성
 * MonoCoroutine을 생성하고 시작
 
-![img_5.png](img_5.png)
+![img_5.png](../resource/reactive-programing/coroutine/basic/img_5.png)
 * MonoCoroutine은 sink를 인자로 받고
 * Coroutine이 complete되면 sink.success를 호출
 * cancel되면 sink.error를 호출
