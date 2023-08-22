@@ -234,3 +234,218 @@ fun main() {
     * UndispatchedCoroutine job을 새로 생성
 * withContext의 블록이 끝나면, 원래의 context로 복구
 
+## CoroutineContext Element
+
+### CoroutineName
+
+* 디버깅에 이용되는 element
+* CoroutineName을 변경하면 logging에 출력
+    * -Dkotlinx.coroutines.debug 필요
+
+![img_16.png](img_16.png)
+
+```kotlin
+fun main() {
+    runBlocking(CoroutineName("runBlocking")) {
+        log.info(
+            "name in runBlocking: {}",
+            this.coroutineContext[CoroutineName]
+        )
+
+        withContext(CoroutineName("withContext")) {
+            log.info(
+                "name in withContext: {}",
+                this.coroutineContext[CoroutineName]
+            )
+        }
+    }
+}
+```  
+
+![img_17.png](img_17.png)
+
+* runBlocking에도 CoroutineContext 제공 가능
+* withContext를 통해서 CoroutineContext를 override
+
+### Job
+
+* Coroutine의 생명주기를 관리
+* Job은 active, completed, cancelled와 같은 여러 상태를 갖는다.
+* start, cancel을 통해서 명시적으로 시작과 취소 가능.
+* parent, children을 통해서 다른 Coroutine의 생명주기도 관리
+* launch, async등의 coroutine builder를 통해서 자식 Job을 생성 가능
+
+### Coroutine과 ThreadLocal
+
+* Coroutine은 Dispatcher에 따라서 다른 쓰레드에서 동작 가능
+* 따라서 ThreadLocal은 동작 불가
+
+```kotlin
+fun main() {
+    val greeting = ThreadLocal<String>()
+    greeting.set("hello")
+
+    runBlocking {
+        log.info("thread: {}", Thread.currentThread().name)
+        log.info("greeting: {}", greeting.get())
+
+        launch(Dispatchers.IO) {
+            log.info("thread: {}", Thread.currentThread().name)
+            log.info("greeting: {}", greeting.get())
+        }
+    }
+}
+```
+
+![img_18.png](img_18.png)
+
+### ThreadLocalElement
+
+* ThreadLocalElement를 통해서 threadLocal을 전달하는 element 제공
+* ThreadLocal의 asContextElement를 통해서 ThreadLocalElement 생성
+
+```kotlin
+fun main() {
+    runBlocking {
+        val greeting = ThreadLocal<String>()
+        greeting.set("hello")
+
+        launch(Dispatchers.IO) {
+            log.info("greeting1: {}", greeting.get())
+        }
+
+        val aContext = Dispatchers.IO + greeting.asContextElement()
+
+        launch(aContext) {
+            log.info("greeting2: {}", greeting.get())
+        }
+
+        val bContext = Dispatchers.Default + greeting.asContextElement("hi")
+
+
+        launch(aContext) {
+            log.info("greeting3: {}", greeting.get())
+            launch(aContext) {
+                log.info("greeting4: {}", greeting.get())
+            }
+        }
+    }
+}
+```
+
+![img_19.png](img_19.png)
+
+* asContextElement로 element로 변환해서 context 형태로 전달 -> 자식 coroutine에도 전달 ( CombinedContext )
+* asContextElement에 값을 전달하여 다른 값을 갖게끔 설정 가능
+
+### ReactorContext
+
+* ReactorContext를 통해서 Reactor의 ContextView를 다른 suspend 함수에 전달.
+
+```kotlin
+fun main() {
+    val greeting = mono {
+        launch(Dispatchers.IO) {
+            val context = this.coroutineContext[ReactorContext]
+                ?.context
+            val who = context?.get<String>("who")
+                ?: "world"
+            log.info("hello, $who")
+
+            val newContext = (context ?: Context.empty()).put("who", "jay")
+            launch(ReactorContext(newContext)) {
+                val context = this.coroutineContext[ReactorContext]
+                    ?.context
+
+                Mono.create<String> {
+                    val who = it.contextView().getOrDefault("who", "world")
+                    it.success("hello, $who")
+                }.contextWrite((context ?: Context.empty()))
+                    .subscribe {
+                        log.info(it)
+                    }
+            }
+        }
+    }
+
+    greeting
+        .contextWrite { it.put("who", "grizz") }
+        .subscribe()
+
+    Thread.sleep(1000)
+}
+```  
+
+![img_20.png](img_20.png)
+
+* contextWith을 통해서 context를 주입
+* launch 내에서 coroutineContext의 ReactorContext로 접근
+* 해당 context를 기반으로 새로운 reactor context 생성
+* ReactorContext(newContext)로 launchdp wjsekf
+* Mono에서 contextWrite을 통해서 coroutineContext로 전달된 reactor context를 주입하고 출력
+
+### CoroutineContext 만들기
+
+```kotlin
+import kotlin.coroutines.AbstractCoroutineContextElement
+
+private class GreetingContext(
+  private val greeting: String,
+) : AbstractCoroutineContextElement(GreetingContext){
+    public companion object Key : 
+        CoroutineContext.Key<GreetingContext>
+  
+    fun greet() {
+      log.info(greeting)
+    }
+}
+```  
+
+
+* AbstractCoroutineContextElement를 상속하는 Context 생성
+* 인자로 greeting을 받고
+* greet 메소드를 실행하면 greeting을 출력
+
+```kotlin
+
+fun main() {
+    runBlocking {
+        val context = GreetingContext("Hello")
+
+        launch(context) {
+            coroutineContext[GreetingContext]?.greet()
+
+            val newContext = GreetingContext("Hola")
+            launch(newContext) {
+                coroutineContext[GreetingContext]?.greet()
+
+                launch {
+                    coroutineContext[GreetingContext]?.greet()
+                }
+            }
+        }
+
+        val job = CoroutineScope(Dispatchers.IO + context).launch {
+            coroutineContext[GreetingContext]?.greet()
+
+            launch {
+                coroutineContext[GreetingContext]?.greet()
+
+                launch {
+                    coroutineContext[GreetingContext]?.greet()
+                }
+            }
+        }
+
+        job.join()
+    }
+}
+
+```  
+![img_21.png](img_21.png)  
+* launch에 context를 전달.
+* context에 key로 접근하여 greet 호출
+* 중간에 Hola값을 갖는 중간 context를 생성하고 newContext로 대체 
+  * 나중에 추가된 GreetingContext로 override되어 그 아래부터 Hola cnffur
+* 새로운 CoroutineScope에도 context 전파
+
