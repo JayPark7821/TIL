@@ -1,5 +1,7 @@
 # Kotlin Coroutines
+
 ## CoroutineContext
+
 ### Coroutine과 ThreadLocal
 
 * coroutine은 다른 쓰레드풀에서 동작 가능
@@ -46,35 +48,35 @@ fun main() {
 ```kotlin
 import kotlin.coroutines.coroutineContext
 
-private suspend fun child(){
+private suspend fun child() {
     log.info("context in suspend : {}", coroutineContext)
-  
+
     var result = suspendCoroutine<Int> { cont ->
         log.info("context in suspendCoroutine : {}", cont.context)
-      cont.resume(100)
+        cont.resume(100)
     }
     log.info("result : {}", result)
 }
 
-fun main(){
+fun main() {
     runBlocking {
         log.info("context in coroutineScope : {}", this.coroutineContext)
         child()
     }
 }
 ```
- 
+
 ![img_4.png](img_4.png)
 
-
 ### CoroutineContext 연산자
+
 * CoroutineContext는 get, plus, minusKey등의 연산자를 제공
 * get: 특정 key를 갖는 Element 반환.
 * plus: 현재 context에 다른 Context를 병합. 이미 같은 key를 갖는 Element가 다른 contest에 있다면 다른 element로 override
 * minusKey: 현재 Context에서 주어진 key를 갖는 element를 제외한 context를 반환.
 
-
 ### CoroutineContext Key, Element
+
 * CoroutineContext는 여러 Element를 포함
 * Element의 개수에 따라 다른 객체로 존재
 * EmptyCoroutineContext: Element가 하나도 없는 상태
@@ -85,6 +87,7 @@ fun main(){
 ![img_5.png](img_5.png)
 
 ### EmptyCoroutineContext
+
 * CoroutineContext를 구현
 * Element를 갖지 않는 텅 빈 CoroutineContext를 가리킨다.
 * 숫자의 0과 같은 객체
@@ -92,6 +95,7 @@ fun main(){
 ![img_6.png](img_6.png)
 
 ### Element 구현체
+
 * Element 인터페이스를 구현하는 구현체
 * CoroutineName, CoroutineDispatcher, CoroutineExceptionHandler, Job, ThreadContextElement등이 존재
 * CoroutineName은 companion object로 key를 포함.
@@ -99,22 +103,23 @@ fun main(){
 
 ![img_7.png](img_7.png)
 
-
 ### CombinedContext
+
 * left와 element로 구성
 * left는 또 다른 CombinedContext혹은 Element를 가리킨다.
 * element는 가장 최근에 추가된 Element를 가리킨다.
 * plus를 통해서 다른 Element가 추가되면
-  * 이미 존재하면 element라면 override
-  * 없는 element라면, 현재 combinedContext를 left로 새로운 element를 element로 하는 CombinedContext를 생성
+    * 이미 존재하면 element라면 override
+    * 없는 element라면, 현재 combinedContext를 left로 새로운 element를 element로 하는 CombinedContext를 생성
 
 ![img_8.png](img_8.png)  
-![img_9.png](img_9.png)  
+![img_9.png](img_9.png)
 
 ### CoroutineContext plus
+
 ```kotlin
 
-fun main(){
+fun main() {
     val context1 = EmptyCoroutineContext
     log.info("context1 : {}", context1)
 
@@ -135,13 +140,13 @@ fun main(){
     log.info("context5 : {}, class: {}", context5, context5.javaClass.simpleName)
 }
 ```  
+
 ![img_10.png](img_10.png)
 
 * EmptyCoroutineContext + Element = Element
 * Element + Element = CombinedContext
-  * 하지만 같은 key를 갖는 Element가 있다면, 뒤에 추가된 Element로 override
+    * 하지만 같은 key를 갖는 Element가 있다면, 뒤에 추가된 Element로 override
 * CombinedContext + Element = CombinedContext
-
 
 ### CoroutineContext get
 
@@ -158,8 +163,74 @@ val element3 = context.get(Job)
 log.info("element3 : {}", element3)
 
 ```  
+
 ![img_11.png](img_11.png)
 
 * CoroutineContext는 get 연산자를 구현했기 떄문에 [CoroutineContext.key] 형태로 Element에 접근 가능
 * 혹은 get 메소드를 통해서 접근 가능
-* key에 해당하는 Element가 없다면 null 반환  
+* key에 해당하는 Element가 없다면 null 반환
+
+## CoroutineContext의 전파
+
+### suspend 함수 사이에서 전파.
+
+* suspend 함수에서 다른 suspend 함수를 호출하는 경우, 바깥 suspend 함수의 Continuation 전달.
+* 이를 통해서 바깥 Continuation의 CoroutineContext가 내부 suspend 함수에 전달
+
+![img_12.png](img_12.png)
+
+### suspend 함수 사이에서 전파 예제
+
+```kotlin
+suspend fun nested() {
+    log.info("context in nested : {}", coroutineContext)
+}
+
+suspend fun outer() {
+    log.info("context in outer : {}", coroutineContext)
+    nested()
+}
+
+fun main() {
+    runBlocking {
+        outer()
+    }
+}
+```  
+
+![img_13.png](img_13.png)
+
+* outer suspend 함수에서 nested suspend 함수를 호출하기 떄문에 CoroutineContext가 그대로 전파.
+
+### withContext
+
+* 현재 Coroutine의 CoroutineContext에 인자로 전달된 context를 merge
+* 새로운 Job을 생성해서 주입
+
+![img_14.png](img_14.png)
+
+### withContext 예제
+
+```kotlin
+fun main() {
+    runBlocking {
+        log.info("context in runBlocking : {}", this.coroutineContext)
+
+        withContext(CoroutineName("withContext")) {
+            val ctx = this.coroutineContext
+            log.info("context in withContext : {}", ctx)
+        }
+
+        log.info("context in runBlocking : {}", this.coroutineContext)
+    }
+}
+```  
+
+![img_15.png](img_15.png)
+
+* runBlocking 내부에서 withContext를 실행
+* withContext는 runBlocking의 coroutineContext를 merge
+    * CoroutineName을 override
+    * UndispatchedCoroutine job을 새로 생성
+* withContext의 블록이 끝나면, 원래의 context로 복구
+
