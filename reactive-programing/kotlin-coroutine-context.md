@@ -449,3 +449,141 @@ fun main() {
   * 나중에 추가된 GreetingContext로 override되어 그 아래부터 Hola cnffur
 * 새로운 CoroutineScope에도 context 전파
 
+
+## Error handling
+### Async의 exception handling
+
+```kotlin
+fun main(){
+    runBlocking {
+        val deferred = CoroutineScope(Dispatchers.IO).async {
+            throw IllegalStateException("exception in launch")
+            10
+        }
+        try{
+            deferred.await()
+        }catch (e: Exception){
+            log.error("Exception caught")
+        }
+    }
+}
+```
+
+![img_22.png](img_22.png)
+
+* CoroutineScope async 내에서 exception이 발생한다면 어떤 결과가?
+* try catch를 통해서 exception을 처리할 수 있다
+* 즉, async는 exception이 발생한 경우 유저에게 exception을 노출
+
+### launch의 Exception handling
+
+```kotlin
+fun main(){
+    runBlocking {
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            launch {
+                launch {
+                    throw IllegalStateException("exception in launch")
+                }
+            }
+        }
+
+        try {
+            job.join()
+        }catch (e: Exception){
+            log.error("Exception caught")
+        }
+    }
+}
+```  
+![img_23.png](img_23.png)  
+* CoroutineScope launch 내에서 exception이 발생한다면 어떤 결과가?
+* catch에 걸리는 대신 exception이 그대로 출력
+* exception이 처리되지 못하고 thread의 uncaughtExceptionHandler를 통해 출력  
+---  
+
+* 만약 launch 전체를 try catch로 감싼다면?
+* 여전히 exception 출력
+* 함수처럼 exception이 전파되는 구조가 아닌 
+* 자식 Job에서 부모 job으로 cancellation이 전파되며 함께 exception이 전달되기 때문
+* 일반적인 try catch로 exception handling 불가.
+
+```kotlin
+fun main(){
+    runBlocking {
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            try{
+                launch {
+                    launch {
+                        throw IllegalStateException("exception in launch")
+                    }
+                }
+            }catch (e: Exception){
+                log.error("Exception caught")
+            } 
+        }
+        job.join()
+    }
+}
+```  
+![img_24.png](img_24.png)
+
+### CoroutineExceptionHandler
+* CoroutineExceptionHandler를 통해서 root coroutine의 exception handling 가능
+* launch에 적용 가능
+  * async에는 적용 불가능
+  * async는 exception을 Deferred를 통해서 전달하기 때문에
+
+ ![img_26.png](img_26.png)
+ 
+```kotlin
+fun main(){
+    runBlocking {
+        val handler = CoroutineExceptionHandler { _, exception ->
+            log.error("exception caught")
+        }
+
+        val job = CoroutineScope(Dispatchers.IO + handler).launch {
+            launch {
+                launch {
+                    throw IllegalStateException("exception in launch")
+                }
+            }
+        }
+        job.join()
+    }
+}
+```
+
+![img_27.png](img_27.png)
+
+* handler를 생성하여 CoroutineScope에 전달
+* Job을 통해서 전달되는 exception을 root coroutine에서 context에 전달된 handler를 통해 처리
+
+---
+
+* 만약 handler를 root Coroutine이 아닌 중간 launch에게 제공한다면??
+```kotlin
+
+fun main(){
+    runBlocking {
+        val handler = CoroutineExceptionHandler { _, exception ->
+            log.error("exception caught")
+        }
+
+        val job = CoroutineScope(Dispatchers.IO ).launch {
+            launch ( handler){
+                launch {
+                    throw IllegalStateException("exception in launch")
+                }
+            }
+        }
+        job.join()
+    }
+}
+```
+
+![img_28.png](img_28.png)
+
+* exception을 handling하지 못하고 그대로 출력  
+  
