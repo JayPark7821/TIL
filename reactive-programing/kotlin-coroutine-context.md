@@ -587,3 +587,146 @@ fun main(){
 
 * exception을 handling하지 못하고 그대로 출력  
   
+---   
+
+---  
+
+## CoroutineDispatcher
+* Coroutine이 어느 쓰레드에서 실행될지 결정하는 Element
+
+![img_29.png](img_29.png)
+
+### CoroutineDispatcher의 종류
+* CoroutineDispatcher는 Default, Main, Unconfined, IO 등을 미리 만들어서 제공 
+
+### CoroutineDispatcher Main
+* Main은 사용 불가
+* Main dispatcher는 library를 통해서 주입 받아야 하는데, kotlinx-coroutine-core에서는 지원하지 않는다.
+* Android(kotlinx-coroutines-android)는 Handler에서 동작하는 Main dispatcher를 제공  
+
+```kotlin
+private fun CoroutineScope.dispatcher(): CoroutineDispatcher?{
+    return this.coroutineContext[CoroutineDispatcher.Key]
+}
+
+fun main(){
+    runBlocking{
+        withContext(Dispatchers.Main){
+            log.info("thread: {}", Thread.currentThread().name)
+            log.info("dispatcher: {}", this.dispatcher())
+        }
+    }
+}
+```  
+![img_30.png](img_30.png)  
+
+### CoroutineDispatcher IO,Default
+* Default는 CPU 코어 수만큼 고정된 크기를 갖는 쓰레드 풀을 제공
+  * Dispatcher가 설정되어 있지 않다면, 기본으로 사용되는 Dispatcher
+  * CPU 개수만큼 동시에 실행될 수 있기 때문에, CPU bound blocking에 적합
+* IO는 기본적으로 최대 64개까지 늘어나는 가변 크기를 갖는 쓰레드 풀을 제공
+  * Blocking IO를 실행하기 위한 쓰레드
+  * Main 쓰레드나 Default 쓰레드에 영향을 주지 않고 분리된 쓰레드풀에서 IO blocking을 격리하기 위함
+  * IO bound blocking에 적합
+
+### CoroutineDispatcher IO,Default
+```kotlin
+fun main(){
+    runBlocking{
+        log.info("thread: {}", Thread.currentThread().name)
+        log.info("dispatcher: {}", this.dispatcher())
+
+        withContext(Dispatchers.Default){
+            log.info("thread1: {}", Thread.currentThread().name)
+            log.info("dispatcher1: {}", this.dispatcher())
+        }
+        withContext(Dispatchers.IO){
+            log.info("thread2: {}", Thread.currentThread().name)
+            log.info("dispatcher2: {}", this.dispatcher())
+        }
+
+        CoroutineScope(CoroutineName("cs")).launch {
+            log.info("thread3: {}", Thread.currentThread().name)
+            log.info("dispatcher3: {}", this.dispatcher())
+        }
+    }
+}
+```  
+
+![img_31.png](img_31.png)  
+
+* runBlocking은 BlockingEventLoop Dispatcher를 사용
+* Default와 IO dispatcher는 DefaultDispatcher-worker-2에서 동일하게 동작
+* CoroutineScope를 만들고 Dispatcher를 전달하지 않아서 Default로 실행
+
+### 왜 Default와 IO Dispatcher는 같은 쓰레드를 사용할까??
+* IO와 Default는 쓰레드풀 (DefaultDispatcher-worker)를 공유
+* Default dispatcher로 시작하고 IO dispatcher로 전환해도 동일한 쓰레드를 사용
+* 하지만 동시에 수행 가능한 쓰레드의 개수를 Default는 고정, IO는 가변으로 제공
+  * CPU bound blocking 작업은 작업의 특성상 쓰레드를 CPU 숫자보다 늘려도 의미가 없다.
+  * IO bound blocking 작업은 쓰레드를 늘릴수록 더 많은 작업 IO을 수행할 수 있다.
+
+### CoroutineDispatcher Unconfined
+* spring webflux에서 controller handlerMethod에 suspend function을 설정한 경우에 해당 함수는 CoroutineDispatcher.Unconfined를 사용한다.
+* Unconfined로 설정되면 어떤 쓰레드에서 coroutine이 실행될지 예상하기 힘들다.
+* 처음엔 caller쓰레드 기준으로 실행
+* 그 이후엔 마지막으로 실행된 suspend 함수의 쓰레드를 따라간다.
+* 쓰레드가 예상 불가능하기 때문에 일반적인 코드에서는 사용하면 안된다.
+
+```kotlin
+private fun threadName(): String{
+    return Thread.currentThread().name
+}
+
+fun main(){
+    runBlocking{
+        launch(Dispatchers.Unconfined){
+            log.info("thread: {}", threadName())
+            withContext(Dispatchers.IO){
+                log.info("thread in withContext: {}", threadName())
+            }
+            log.info("thread2 : {} ", threadName())
+            delay(100)
+            log.info("thread3 : {} ", threadName())
+        }
+    }
+}
+```  
+![img_32.png](img_32.png)  
+
+* main 쓰레드에서 호출 후 main 쓰레드에서 실행
+* withContext는 Dispatchers.IO로 실행
+* delay는 DefaultExecutor로 실행
+
+### ExecutorCoroutineDispatcher
+```kotlin
+fun main(){
+    runBlocking {
+        val single = newSingleThreadContext("single")
+        val fixed = newFixedThreadPoolContext(4, "fixed")
+
+        val job = launch(single) {
+            log.info("thread: {}", threadName())
+
+            withContext(fixed) {
+                log.info("thread2: {}", threadName())
+                withContext(Dispatchers.IO) {
+                    log.info("thread3: {}", threadName())
+                    withContext(single) {
+                        log.info("thread4: {}", threadName())
+                    }
+                }
+            }
+        }
+        job.join()
+        single.close()
+        fixed.close()
+    }
+}
+```
+
+![img_33.png](img_33.png)  
+
+* runBlocking은 main 쓰레드에서 실행
+* withContext는 Dispatchers.IO로 실행
+* delay는 DefaultExecutor로 실행
