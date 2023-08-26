@@ -9,7 +9,7 @@
   * 자식 coroutine들이 모두 완료되어야만 scpoe도 완료
 * 이런 관리를 위해서 CoroutineScope의 CoroutineContext에는 꼭 Job을 포
 
-![img_34.png](img_34.png)
+![img_34.png](../resource/reactive-programing/coroutine/scope/img_34.png)
 
 ### CoroutineScope 함수
 * CoroutineScope 함수를 이용해서 CoroutineScope를 생성
@@ -17,9 +17,9 @@
 * 포함되어있지 않다면 Job을 생성하여 추가하고 ContextScope에 전달
 * ContextScope는 CoroutineScope의 단순한 구현체
 
-![img_35.png](img_35.png)  
-![img_36.png](img_36.png)  
-![img_37.png](img_37.png)
+![img_35.png](../resource/reactive-programing/coroutine/scope/img_35.png)  
+![img_36.png](../resource/reactive-programing/coroutine/scope/img_36.png)  
+![img_37.png](../resource/reactive-programing/coroutine/scope/img_37.png)
 
 ```kotlin
 import kotlin.coroutines.EmptyCoroutineContext
@@ -31,7 +31,7 @@ fun main() {
   log.info("class name :{}", cs.javaClass.name)
 }
 ```  
-![img_38.png](img_38.png)  
+![img_38.png](../resource/reactive-programing/coroutine/scope/img_38.png)  
 
 
 * EmptyCoroutineContext를 통해 텅빈 CoroutineContext를 생성
@@ -51,8 +51,8 @@ fun main() {
   * 외부에서 launch를 실행한 후 Job을 획득하여 cancel, join등을 실행 가능
 * newCoroutineContext를 통해 CoroutineScope의 coroutineContext와 인자로 주어진 context를 merge
 
-![img_39.png](img_39.png)  
-![img_40.png](img_40.png)
+![img_39.png](../resource/reactive-programing/coroutine/scope/img_39.png)  
+![img_40.png](../resource/reactive-programing/coroutine/scope/img_40.png)
 
 ```kotlin
 fun main(){
@@ -72,7 +72,7 @@ fun main(){
     }
 }
 ```  
-![img_41.png](img_41.png)
+![img_41.png](../resource/reactive-programing/coroutine/scope/img_41.png)
 
 * CoroutineScope에 coroutine builder인 launch를 통해서 coroutine을 생성하고 this로 접근
 * 비동기로 동작하기 때문에 join을 통해서 완료될 떄까지 suspend
@@ -84,8 +84,8 @@ fun main(){
   * Deferred는 Job을 상속하고 있기 때문에 cancel,join 뿐만 아니라 
   * await을 통해서 block이 반환하는 값에 접근 가능
 
-![img_42.png](img_42.png)  
-![img_43.png](img_43.png)
+![img_42.png](../resource/reactive-programing/coroutine/scope/img_42.png)  
+![img_43.png](../resource/reactive-programing/coroutine/scope/img_43.png)
 
 ```kotlin
 fun main(){
@@ -108,7 +108,7 @@ fun main(){
 }
 ```  
 
-![img_44.png](img_44.png)
+![img_44.png](../resource/reactive-programing/coroutine/scope/img_44.png)
 
 * CoroutineScope에 coroutine builder인 async를 통해서 coroutine을 생성하고 this로 접근
 * 비동기로 동작하기 때문에 await을 통해서 완료될 떄까지 suspend하고 값에 접근
@@ -125,7 +125,7 @@ fun main(){
 * 모든 Coroutine은 AbstractCoroutine을 상속
 * Coroutine은 Job이며 Continuation이고 CoroutineScope  
 
-![img_45.png](img_45.png)
+![img_45.png](../resource/reactive-programing/coroutine/scope/img_45.png)
 * Job: 작업의 단위가 되고 start, cancel로 상태를 변경할 수 있으며 join으로 완료 시점을 명시
 * CoroutineScope: Coroutine builder를 통해서 자식 Coroutine을 생성하고, 자식 Coroutine들의 생명주기를 관리
  
@@ -152,7 +152,7 @@ fun main(){
     }
 }
 ```  
-![img_46.png](img_46.png)
+![img_46.png](../resource/reactive-programing/coroutine/scope/img_46.png)
 
 * CoroutineScope에 coroutine builder인 launch를 통해서 coroutine (이하 corotuine1)을 생성
 * coroutine1에서 자식 coroutine(이하 coroutine2)를 생성
@@ -190,7 +190,7 @@ fun main(){
   }
 }
 ```   
-![img_47.png](img_47.png)  
+![img_47.png](../resource/reactive-programing/coroutine/scope/img_47.png)  
 
 * 여러 job들이 완료되어야 하는 시점이 중요하다면?
   * job1, job2, job3은 정확히 step1, 출력과 step2 출력 사이에 완료되어야 한다.
@@ -226,7 +226,7 @@ fun main(){
     }
 }
 ```  
-![img_48.png](img_48.png)  
+![img_48.png](../resource/reactive-programing/coroutine/scope/img_48.png)  
 
 * coroutine들을 묶은 coroutine을 생성하여 join
 * job1은 3개의 coroutine을 포함하고
@@ -240,8 +240,8 @@ fun main(){
 * ScopeCoroutine을 생성하여 block을 실행
   * ScopeCoroutine은 동기적으로 동작
 
-![img_49.png](img_49.png)  
-![img_50.png](img_50.png)  
+![img_49.png](../resource/reactive-programing/coroutine/scope/img_49.png)  
+![img_50.png](../resource/reactive-programing/coroutine/scope/img_50.png)  
 
 
 ### launch 문제 해결 2
@@ -272,7 +272,7 @@ fun main(){
     }
 }
 ```  
-![img_51.png](img_51.png)
+![img_51.png](../resource/reactive-programing/coroutine/scope/img_51.png)
 
 * coroutineScope를 생성하여 step1과 step2 사이에 추가
 * coroutineScope는 동기적으로 동작
@@ -306,7 +306,7 @@ fun main() {
 }
 ```  
 
-![img_52.png](img_52.png)
+![img_52.png](../resource/reactive-programing/coroutine/scope/img_52.png)
 
 * coroutineScope는 동기적으로 launch는 비동기적으로 동작
 * coroutineScope는 ScopeCoroutine을 생성하지만 ContinuationId를 override하지 않고 launch는 새로운 ContinuationId를 생성 (standaloneCoroutine은 새로운 id를 생성)
@@ -346,7 +346,7 @@ fun main() {
 }
 ```  
 
-![img_53.png](img_53.png)  
+![img_53.png](../resource/reactive-programing/coroutine/scope/img_53.png)  
 
 * 여러 deferred들이 완료되어야 하는 시점이 중요하다면?
   * deferred1,2,3은 정확히 step1 출력과 step2 출력 사이에 반환되어야 한다.
@@ -386,7 +386,7 @@ fun main() {
     }
 }
 ```  
-![img_54.png](img_54.png)
+![img_54.png](../resource/reactive-programing/coroutine/scope/img_54.png)
 
 * coroutineScope로 async를 감싸고 마지막에 await을 호출하여 결과를 합산
   * async 함수를 호출하는 순간부터 각각의 coroutine들은 시작
@@ -401,7 +401,7 @@ fun main() {
 * oldContext에 인자로 전달받은 context를 merge한 newContext를 생성
 * newContext와 oldContext의 상태에 따라서 ScopeCoroutine, UndispatchedCoroutine, DispatchedCoroutine을 반환
   
-![img_55.png](img_55.png)  
+![img_55.png](../resource/reactive-programing/coroutine/scope/img_55.png)  
 
 ```kotlin
 fun main(){
@@ -420,7 +420,7 @@ fun main(){
 }
 ```  
 
-![img_56.png](img_56.png)
+![img_56.png](../resource/reactive-programing/coroutine/scope/img_56.png)
 
 * withContext를 실행하여 DispatchedCoroutine 생성
 * 동기적으로 동작
@@ -455,7 +455,7 @@ fun main() {
     }
 }
 ```
-![img_57.png](img_57.png)  
+![img_57.png](../resource/reactive-programing/coroutine/scope/img_57.png)  
 
 * coroutineScope에 coroutine이 추가되면 해당 coroutine은 coroutineScope의 Job을 부모로 갖는다.
 * coroutine이 coroutineScope로 동작하는 상황이라면 자기 자신을 Job으로 가지고 있기 때문에 coroutine끼리 부모-자식 구조가 형성됨
@@ -498,7 +498,7 @@ fun main() {
 }
 ```
 
-![img_58.png](img_58.png)  
+![img_58.png](../resource/reactive-programing/coroutine/scope/img_58.png)  
 
 * launch2, launch3 내부의 Coroutine에서 delay에 걸려있는 동안
 * 100ms가 지나고 CoroutineScope를 cancel
@@ -547,7 +547,7 @@ fun main() {
 }
 ```
 
-![img_59.png](img_59.png)  
+![img_59.png](../resource/reactive-programing/coroutine/scope/img_59.png)  
 
 * Root Coroutine에서 cancelAndJoin 실행
   * Root Coroutine에서 cancel을 진행하고 join을 통해서 모든 coroutine이 종료될때까지 대기
@@ -594,7 +594,7 @@ fun main() {
     }
 }
 ```  
-![img_60.png](img_60.png)
+![img_60.png](../resource/reactive-programing/coroutine/scope/img_60.png)
 
 * leaf에 해당하는 coroutine2와 coroutine3중에 coroutine2를 job으로 받아서 cancel
 * job2는 cancel되고 JobCancellationException throw
@@ -637,7 +637,7 @@ fun main() {
 }
 ```  
 
-![img_61.png](img_61.png)
+![img_61.png](../resource/reactive-programing/coroutine/scope/img_61.png)
 
 * 만약 leaf coroutine에서 exception이 발생한 다면?
 * coroutine3의 delay가 JobCancellationException throw
@@ -679,7 +679,7 @@ fun main() {
 }
 ```
 
-![img_62.png](img_62.png)  
+![img_62.png](../resource/reactive-programing/coroutine/scope/img_62.png)  
 
 * SupervisorJob을 Context로 제공하면 exception에 의한 cancel 전파가 위로 전달되지 않고 아래 방향으로만 전파.
 
@@ -725,7 +725,7 @@ fun main() {
 }
 ```
 
-![img_63.png](img_63.png)
+![img_63.png](../resource/reactive-programing/coroutine/scope/img_63.png)
 
 * withTimeOut을 통해 일정 시간 대기
 * 시간 초과시 해당 Coroutine을 cancel하고 TimeoutCancellationException throw

@@ -32,18 +32,18 @@ fun main() {
 * Continuation은 coroutine 내의 모든 suspend 함수에 전달
 * 그리고 CoroutineContext를 포함한다.
 
-![img.png](img.png)
+![img.png](../resource/reactive-programing/coroutine/context/img.png)
 
 ### CoroutineContext 접근
 
 * runBlocking, launch, async와 같은 CoroutineScope 내부에 있다면 CoroutineScope.coroutineContext를 통해서 접근 가능  
-  ![img_1.png](img_1.png)
+  ![img_1.png](../resource/reactive-programing/coroutine/context/img_1.png)
 
 * Continuation에 접근이 가능하다면, Continuation.coroutineContext를 통해서 접근 가능  
-  ![img_2.png](img_2.png)
+  ![img_2.png](../resource/reactive-programing/coroutine/context/img_2.png)
 
 * suspend 함수 내부에서는 CoroutineContext를 통해서 접근 가능.  
-  ![img_3.png](img_3.png)
+  ![img_3.png](../resource/reactive-programing/coroutine/context/img_3.png)
 
 ```kotlin
 import kotlin.coroutines.coroutineContext
@@ -66,7 +66,7 @@ fun main() {
 }
 ```
 
-![img_4.png](img_4.png)
+![img_4.png](../resource/reactive-programing/coroutine/context/img_4.png)
 
 ### CoroutineContext 연산자
 
@@ -84,7 +84,7 @@ fun main() {
 * CombinedContext: Element가 두 개 이상 일 때
 * Key: Element를 구분할 때 사용하는 식별자
 
-![img_5.png](img_5.png)
+![img_5.png](../resource/reactive-programing/coroutine/context/img_5.png)
 
 ### EmptyCoroutineContext
 
@@ -92,7 +92,7 @@ fun main() {
 * Element를 갖지 않는 텅 빈 CoroutineContext를 가리킨다.
 * 숫자의 0과 같은 객체
 
-![img_6.png](img_6.png)
+![img_6.png](../resource/reactive-programing/coroutine/context/img_6.png)
 
 ### Element 구현체
 
@@ -101,7 +101,7 @@ fun main() {
 * CoroutineName은 companion object로 key를 포함.
 * AbstractCoroutineContextElement(CoroutineName)은 AbstractCoroutineContextElement(CoroutineName.Key)와 동일
 
-![img_7.png](img_7.png)
+![img_7.png](../resource/reactive-programing/coroutine/context/img_7.png)
 
 ### CombinedContext
 
@@ -112,8 +112,8 @@ fun main() {
     * 이미 존재하면 element라면 override
     * 없는 element라면, 현재 combinedContext를 left로 새로운 element를 element로 하는 CombinedContext를 생성
 
-![img_8.png](img_8.png)  
-![img_9.png](img_9.png)
+![img_8.png](../resource/reactive-programing/coroutine/context/img_8.png)  
+![img_9.png](../resource/reactive-programing/coroutine/context/img_9.png)
 
 ### CoroutineContext plus
 
@@ -141,7 +141,7 @@ fun main() {
 }
 ```  
 
-![img_10.png](img_10.png)
+![img_10.png](../resource/reactive-programing/coroutine/context/img_10.png)
 
 * EmptyCoroutineContext + Element = Element
 * Element + Element = CombinedContext
@@ -164,7 +164,7 @@ log.info("element3 : {}", element3)
 
 ```  
 
-![img_11.png](img_11.png)
+![img_11.png](../resource/reactive-programing/coroutine/context/img_11.png)
 
 * CoroutineContext는 get 연산자를 구현했기 떄문에 [CoroutineContext.key] 형태로 Element에 접근 가능
 * 혹은 get 메소드를 통해서 접근 가능
@@ -177,7 +177,7 @@ log.info("element3 : {}", element3)
 * suspend 함수에서 다른 suspend 함수를 호출하는 경우, 바깥 suspend 함수의 Continuation 전달.
 * 이를 통해서 바깥 Continuation의 CoroutineContext가 내부 suspend 함수에 전달
 
-![img_12.png](img_12.png)
+![img_12.png](../resource/reactive-programing/coroutine/context/img_12.png)
 
 ### suspend 함수 사이에서 전파 예제
 
@@ -198,7 +198,7 @@ fun main() {
 }
 ```  
 
-![img_13.png](img_13.png)
+![img_13.png](../resource/reactive-programing/coroutine/context/img_13.png)
 
 * outer suspend 함수에서 nested suspend 함수를 호출하기 떄문에 CoroutineContext가 그대로 전파.
 
@@ -207,7 +207,7 @@ fun main() {
 * 현재 Coroutine의 CoroutineContext에 인자로 전달된 context를 merge
 * 새로운 Job을 생성해서 주입
 
-![img_14.png](img_14.png)
+![img_14.png](../resource/reactive-programing/coroutine/context/img_14.png)
 
 ### withContext 예제
 
@@ -226,7 +226,7 @@ fun main() {
 }
 ```  
 
-![img_15.png](img_15.png)
+![img_15.png](../resource/reactive-programing/coroutine/context/img_15.png)
 
 * runBlocking 내부에서 withContext를 실행
 * withContext는 runBlocking의 coroutineContext를 merge
@@ -242,7 +242,7 @@ fun main() {
 * CoroutineName을 변경하면 logging에 출력
     * -Dkotlinx.coroutines.debug 필요
 
-![img_16.png](img_16.png)
+![img_16.png](../resource/reactive-programing/coroutine/context/img_16.png)
 
 ```kotlin
 fun main() {
@@ -262,7 +262,7 @@ fun main() {
 }
 ```  
 
-![img_17.png](img_17.png)
+![img_17.png](../resource/reactive-programing/coroutine/context/img_17.png)
 
 * runBlocking에도 CoroutineContext 제공 가능
 * withContext를 통해서 CoroutineContext를 override
@@ -297,7 +297,7 @@ fun main() {
 }
 ```
 
-![img_18.png](img_18.png)
+![img_18.png](../resource/reactive-programing/coroutine/context/img_18.png)
 
 ### ThreadLocalElement
 
@@ -333,7 +333,7 @@ fun main() {
 }
 ```
 
-![img_19.png](img_19.png)
+![img_19.png](../resource/reactive-programing/coroutine/context/img_19.png)
 
 * asContextElement로 element로 변환해서 context 형태로 전달 -> 자식 coroutine에도 전달 ( CombinedContext )
 * asContextElement에 값을 전달하여 다른 값을 갖게끔 설정 가능
@@ -376,7 +376,7 @@ fun main() {
 }
 ```  
 
-![img_20.png](img_20.png)
+![img_20.png](../resource/reactive-programing/coroutine/context/img_20.png)
 
 * contextWith을 통해서 context를 주입
 * launch 내에서 coroutineContext의 ReactorContext로 접근
@@ -442,7 +442,7 @@ fun main() {
 }
 
 ```  
-![img_21.png](img_21.png)  
+![img_21.png](../resource/reactive-programing/coroutine/context/img_21.png)  
 * launch에 context를 전달.
 * context에 key로 접근하여 greet 호출
 * 중간에 Hola값을 갖는 중간 context를 생성하고 newContext로 대체 
@@ -469,7 +469,7 @@ fun main(){
 }
 ```
 
-![img_22.png](img_22.png)
+![img_22.png](../resource/reactive-programing/coroutine/context/img_22.png)
 
 * CoroutineScope async 내에서 exception이 발생한다면 어떤 결과가?
 * try catch를 통해서 exception을 처리할 수 있다
@@ -496,7 +496,7 @@ fun main(){
     }
 }
 ```  
-![img_23.png](img_23.png)  
+![img_23.png](../resource/reactive-programing/coroutine/context/img_23.png)  
 * CoroutineScope launch 내에서 exception이 발생한다면 어떤 결과가?
 * catch에 걸리는 대신 exception이 그대로 출력
 * exception이 처리되지 못하고 thread의 uncaughtExceptionHandler를 통해 출력  
@@ -526,7 +526,7 @@ fun main(){
     }
 }
 ```  
-![img_24.png](img_24.png)
+![img_24.png](../resource/reactive-programing/coroutine/context/img_24.png)
 
 ### CoroutineExceptionHandler
 * CoroutineExceptionHandler를 통해서 root coroutine의 exception handling 가능
@@ -534,7 +534,7 @@ fun main(){
   * async에는 적용 불가능
   * async는 exception을 Deferred를 통해서 전달하기 때문에
 
- ![img_26.png](img_26.png)
+ ![img_26.png](../resource/reactive-programing/coroutine/context/img_26.png)
  
 ```kotlin
 fun main(){
@@ -555,7 +555,7 @@ fun main(){
 }
 ```
 
-![img_27.png](img_27.png)
+![img_27.png](../resource/reactive-programing/coroutine/context/img_27.png)
 
 * handler를 생성하여 CoroutineScope에 전달
 * Job을 통해서 전달되는 exception을 root coroutine에서 context에 전달된 handler를 통해 처리
@@ -583,7 +583,7 @@ fun main(){
 }
 ```
 
-![img_28.png](img_28.png)
+![img_28.png](../resource/reactive-programing/coroutine/context/img_28.png)
 
 * exception을 handling하지 못하고 그대로 출력  
   
@@ -594,7 +594,7 @@ fun main(){
 ## CoroutineDispatcher
 * Coroutine이 어느 쓰레드에서 실행될지 결정하는 Element
 
-![img_29.png](img_29.png)
+![img_29.png](../resource/reactive-programing/coroutine/context/img_29.png)
 
 ### CoroutineDispatcher의 종류
 * CoroutineDispatcher는 Default, Main, Unconfined, IO 등을 미리 만들어서 제공 
@@ -618,7 +618,7 @@ fun main(){
     }
 }
 ```  
-![img_30.png](img_30.png)  
+![img_30.png](../resource/reactive-programing/coroutine/context/img_30.png)  
 
 ### CoroutineDispatcher IO,Default
 * Default는 CPU 코어 수만큼 고정된 크기를 갖는 쓰레드 풀을 제공
@@ -653,7 +653,7 @@ fun main(){
 }
 ```  
 
-![img_31.png](img_31.png)  
+![img_31.png](../resource/reactive-programing/coroutine/context/img_31.png)  
 
 * runBlocking은 BlockingEventLoop Dispatcher를 사용
 * Default와 IO dispatcher는 DefaultDispatcher-worker-2에서 동일하게 동작
@@ -692,7 +692,7 @@ fun main(){
     }
 }
 ```  
-![img_32.png](img_32.png)  
+![img_32.png](../resource/reactive-programing/coroutine/context/img_32.png)  
 
 * main 쓰레드에서 호출 후 main 쓰레드에서 실행
 * withContext는 Dispatchers.IO로 실행
@@ -725,7 +725,7 @@ fun main(){
 }
 ```
 
-![img_33.png](img_33.png)  
+![img_33.png](../resource/reactive-programing/coroutine/context/img_33.png)  
 
 * runBlocking은 main 쓰레드에서 실행
 * withContext는 Dispatchers.IO로 실행
