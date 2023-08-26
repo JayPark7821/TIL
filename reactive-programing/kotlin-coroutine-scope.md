@@ -425,3 +425,307 @@ fun main(){
 * withContext를 실행하여 DispatchedCoroutine 생성
 * 동기적으로 동작
 * withContext를 통해서 변경된 context는 witchContext 내부에만 영향
+
+---  
+
+---  
+
+## Job Cancellation
+### Job 트리
+
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+        log.info("job1: {}", cs.coroutineContext[Job])
+
+
+        cs.launch {
+            log.info("job2: {}", this.coroutineContext[Job])
+
+            launch {
+                log.info("job3: {}", this.coroutineContext[Job])
+            }
+
+            launch {
+                log.info("job4: {}", this.coroutineContext[Job])
+            }
+        }
+        delay(100)
+    }
+}
+```
+![img_57.png](img_57.png)  
+
+* coroutineScope에 coroutine이 추가되면 해당 coroutine은 coroutineScope의 Job을 부모로 갖는다.
+* coroutine이 coroutineScope로 동작하는 상황이라면 자기 자신을 Job으로 가지고 있기 때문에 coroutine끼리 부모-자식 구조가 형성됨
+* 만약 cancel이 발생한다면?
+
+### cancel - CoroutineScope
+
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+
+        // launch1
+        cs.launch {
+            // launch2
+            launch {
+                delay(1000)
+                log.info("job2: I'm done")
+            }
+
+            // launch3
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job3: I'm done")
+                } catch (e: Exception) {
+                    log.info("job3: I'm cancelled")
+                    log.info("e: {}", e)
+                }
+            }
+
+            delay(1000)
+            log.info("job1: I'm done")
+        }
+
+        delay(100)
+        cs.cancel()
+        log.info("finished")
+    }
+}
+```
+
+![img_58.png](img_58.png)  
+
+* launch2, launch3 내부의 Coroutine에서 delay에 걸려있는 동안
+* 100ms가 지나고 CoroutineScope를 cancel
+* root job이 cancel되고 cancellation이 전파.
+* delay에서 jobCancellationException throw
+  * coroutineScope는 join을 제공하지 않기 때문에 확인 불가.
+
+### cancel - Root Coroutine
+
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+
+        // launch1
+        val job = cs.launch {
+            // launch2
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job2: I'm done")
+                } catch (e: Exception) {
+                    log.info("job2: I'm cancelled")
+                    log.info("e2: {}", e)
+                }
+            }
+
+            // launch3
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job3: I'm done")
+                } catch (e: Exception) {
+                    log.info("job3: I'm cancelled")
+                    log.info("e3: {}", e)
+                }
+            }
+
+            delay(1000)
+            log.info("job1: I'm done")
+        }
+
+        delay(100)
+        job.cancelAndJoin()
+    }
+}
+```
+
+![img_59.png](img_59.png)  
+
+* Root Coroutine에서 cancelAndJoin 실행
+  * Root Coroutine에서 cancel을 진행하고 join을 통해서 모든 coroutine이 종료될때까지 대기
+* job2, job3의 delay에서 모두 JobCancellationException throw
+
+
+### cancel - Leaf Coroutine
+
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+
+        // launch1
+        val job = cs.launch {
+            // launch2
+            val job2 = launch {
+                try {
+                    delay(1000)
+                    log.info("job2: I'm done")
+                } catch (e: Exception) {
+                    log.info("job2: I'm cancelled")
+                    log.info("e2: {}", e.message)
+                }
+            }
+
+            // launch3
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job3: I'm done")
+                } catch (e: Exception) {
+                    log.info("job3: I'm cancelled")
+                    log.info("e3: {}", e.message)
+                }
+            }
+
+            delay(100)
+            job2.cancel()
+        }
+
+        job.join()
+        log.info("job is cancelled: {}", job.isCancelled)
+    }
+}
+```  
+![img_60.png](img_60.png)
+
+* leaf에 해당하는 coroutine2와 coroutine3중에 coroutine2를 job으로 받아서 cancel
+* job2는 cancel되고 JobCancellationException throw
+* job3는 실행
+* root coroutine의 경우도 cancelled가 아님!
+
+### cancel은 부모에서 자식으로는 전파가 되지만 자식에서 부모로는 전파가 되지 않는다.
+
+### exception - Lead Coroutine
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+        val csJob = cs.coroutineContext[Job]
+
+        // launch1
+        val job = cs.launch {
+            // launch2
+            launch {
+                delay(100)
+                throw IllegalStateException("unexpected")
+            }
+
+            // launch3
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job3: I'm done")
+                } catch (e: Exception) {
+                    log.info("job3: I'm cancelled")
+                    log.info("e3: {}", e.message)
+                }
+            }
+        }
+
+        job.join()
+        log.info("job is cancelled: {}", job.isCancelled)
+        log.info("csJob is cancelled: {}", csJob?.isCancelled)
+    }
+}
+```  
+
+![img_61.png](img_61.png)
+
+* 만약 leaf coroutine에서 exception이 발생한 다면?
+* coroutine3의 delay가 JobCancellationException throw
+  * message는 Parent job is Cancelling
+* root coroutine, coroutineScope의 job 모두 cancelled
+
+
+### exception - SupervisorJob
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+        val csJob = cs.coroutineContext[Job]
+
+        // launch1
+        val job = cs.launch {
+            // launch2
+            launch(SupervisorJob()) {
+                delay(100)
+                throw IllegalStateException("unexpected")
+            }
+
+            // launch3
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job3: I'm done")
+                } catch (e: Exception) {
+                    log.info("job3: I'm cancelled")
+                    log.info("e3: {}", e.message)
+                }
+            }
+        }
+
+        job.join()
+        log.info("job is cancelled: {}", job.isCancelled)
+        log.info("csJob is cancelled: {}", csJob?.isCancelled)
+    }
+}
+```
+
+![img_62.png](img_62.png)  
+
+* SupervisorJob을 Context로 제공하면 exception에 의한 cancel 전파가 위로 전달되지 않고 아래 방향으로만 전파.
+
+### withTimeout
+
+```kotlin
+fun main() {
+    runBlocking {
+        val cs = CoroutineScope(Dispatchers.Default)
+        val csJob = cs.coroutineContext[Job]
+
+        // launch1
+        val job = cs.launch {
+            // launch2
+            launch {
+                withTimeout(500) {
+                    try {
+                        delay(1000)
+                        log.info("job2: I'm done")
+                    } catch (e: Exception) {
+                        log.info("job2: I'm cancelled")
+                        log.info("e2: {}", e.message)
+                    }
+                }
+            }
+
+            // launch3
+            launch {
+                try {
+                    delay(1000)
+                    log.info("job3: I'm done")
+                } catch (e: Exception) {
+                    log.info("job3: I'm cancelled")
+                    log.info("e3: {}", e.message)
+                }
+            }
+        }
+
+        job.join()
+        log.info("job is cancelled: {}", job.isCancelled)
+        log.info("csJob is cancelled: {}", csJob?.isCancelled)
+    }
+}
+```
+
+![img_63.png](img_63.png)
+
+* withTimeOut을 통해 일정 시간 대기
+* 시간 초과시 해당 Coroutine을 cancel하고 TimeoutCancellationException throw
