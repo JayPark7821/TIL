@@ -64,4 +64,89 @@ try (MonogClient mongoClient = MonoClients.create(settings)) {
     .subscribe(new SimpleSubscriber<>());
 	Thread.sleep(1000);
 }
-``` 
+```
+
+### BSON Codec
+* PojoCodec 등록
+
+```java
+var pojoCodecRegistry = fromProviders(
+	    PojoCodecProvider.builder().automatic(true).build()
+        );
+
+var settings = MongoClientSettings.builder()
+        .applyConnectionString(connection)
+        .codecRegistry(
+			fromRegistries(
+				MongoClientSettings.getDefaultCodecRegistry(),
+                pojoCodecRegistry
+            )   
+        )
+        .build();
+
+try(MonogClient mongoClient = MonoClients.create(settings)) {
+    MongoDatabase database = mongoClient.getDatabase("jay");
+	    MongoCollection<Person> collection = database.getCollection("test", Person.class);
+		
+		collection.find()
+        .subscribe(new SimpleSubscriber<>());
+		Thread.sleep(1000);
+}
+```
+* PojoCodeProvider builder를 이용해서 automatic을 true로 제공
+  * automatic을 true로 제공해야 pojo 변환을 지원
+* getCollection의 2번째 인자로 Person 제공
+* Document대신 Person으로 find
+
+
+### Custom Codec
+
+```java
+@Slf4j
+public class PersonCodec implements Coder<Person>{
+	    @Override
+    public Person decode(BsonReader reader, DecoderContext decoderContext) {
+        reader.readStartDocument();
+        ObjectId id = reader.readObjectId("_id");
+        String name = reader.readString("name");
+        int age = reader.readInt32("age");
+        String gender = reader.readString("gender");
+		reader.readEndDocument();
+		
+        return new Person(id, name, age, gender);
+    }
+}
+```
+* Codec 인터페이스를 직접 구현
+* reader의 readObjectId, readString 등을 사용하면 하나의 필드를 읽고 java 클래스로 mapping
+  * 만약 encode 되어있는 필드 순서와 read하는 순서가 다르면 exception 발생 가능
+  * 이를 위해 readName을 호출하여 필드 이름을 파악한 후 해당 필드 이름과 매칭되는 readXX 메소드 호출도 가능
+  
+### Custom Codec 등록
+```java
+var customCodecRegistry = fromCodecs(new PersonCodec());
+
+var settings = MongoClientSetting.builder()
+        .applyConnectionString(connection)
+        .codecRegistry(
+			fromRegistries(
+				MongoClientSettings.getDefaultCodecRegistry(),
+                customCodecRegistry
+            )   
+        )
+        .build();
+
+try(MonogClient mongoClient = MonoClients.create(settings)) {
+    MongoDatabase database = mongoClient.getDatabase("jay");
+    MongoCollection<Person> collection = database.getCollection("test", Person.class);
+                  
+    collection.find()
+    .subscribe(new SimpleSubscriber<>());
+                  
+    Thread.sleep(1000);
+}
+```
+
+* fromCodecs를 이용해서 custom codec을 CodecRegistry로 변형
+* 해당 CodecRegistry를 fromRegistries로 settings에 등록
+ 
