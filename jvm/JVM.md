@@ -43,7 +43,6 @@
   while the compilation is taking place, The JVM will continue to use interpreted version but once,  
   that compilation is complete then the native machine code version is available to be used,  
   the JVM can switch to using that instead of the interpreted version.
- 
 
 <br />   
 
@@ -127,4 +126,42 @@ public class PrimeNumbers {
 ` run the sample code with java  -XX:+UnlockDiagnosticVMOptions -XX:+LogComilation jvm.jit.Main 5000`
 ![img_5.png](img_5.png)
 ![img_4.png](img_4.png)
+
+
+* So the JVM place the code into the code cache if it's going to be used a lot.  
+  but the code cache has limited size and if there are lots of methods that could be saved in the code cache  
+  then some will need to removed from the code cache to make space for the next one.  
+  the removed ones could be recompiled and re-added later on
+
+* if the code cache is full, we can see the following warning message appear in the console  
+`VM warning: CodeCache is full. Compiler has been disabled.`  
+* this tells us that the application would run better if another part of code could be compiled to native machine code  
+  but there's no there's no space in the code cache to do that.
+* we can find out the size of the code cache by using JVM flag which is `-XX:+PrintCodeCache`  
+
+![img_6.png](img_6.png)
+
+* we can change the code cache size with following three different flags
+  * `InitialCodeCacheSize` - the size of the code cache when the application starts  
+  * `ReservedCodeCacheSize`  - the maximum size of the code cache
+  * `CodeCacheExpansionSize` - the amount by which the code cache will grow if it needs to expand  
+![img_7.png](img_7.png)
+
+
+* with `-XX:-TieredCompilation` we can turn off tiered compilation to tell the JVM to run in interpreted mode only  
+  maybe an application that is running one line of code only, maybe like serverless application for example, that wil fire up  
+  run a single statement and then shut down again could conceivably be quicker using interpreted mode only.
+
+* there are two factors that can affect the performance of out application  
+  the first is how many threads are available to run this compiling process  
+  the second is what's the threshold for native compilation
+
+` can change the number of threads for compilation with -XX:CICompilerCount={number of threads}`    
+
+` can change the threshold for native compilation with -XX:CompileThreshold={number of threshold}`
+
+
+
+
+
 
