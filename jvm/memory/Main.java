@@ -1,5 +1,8 @@
 package jvm.memory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Main
  *
@@ -9,7 +12,7 @@ package jvm.memory;
  */
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main1(String[] args) {
         int value = 7;
         value = calculate(value);
     }
@@ -18,5 +21,17 @@ public class Main {
         int tempValue = data + 3;
         int newValue = tempValue * 2;
         return newValue;
+    }
+
+    public static void main(String[] args) {
+        List<String> myList = new ArrayList<>();
+        myList.add("one");
+        myList.add("two");
+        myList.add("three");
+        printList(myList);
+    }
+
+    private static void printList(List<String> myList) {
+        System.out.println(myList);
     }
 }
