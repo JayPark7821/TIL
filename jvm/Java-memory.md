@@ -159,3 +159,42 @@ private static void printList(List<String> data) {
 |                                         | String "Three"                                                                                             |
 |                                         | String "Four"                                                                                              |
 
+
+### Passing by value
+
+```java
+public class Main {
+
+    public static void calculate(int calcValue){
+         calcValue = calcValue + 100;
+    }
+    public static void main(String[] args) {
+        int localValue = 5;
+        calculate(localValue);
+        System.out.println(localValue);
+    }
+}
+```
+
+* The output of the above code is 5,  
+  so the variable in the method in this case, calcValue is always a copy of the value passed into it  
+  it doesn't matter what the name of the variable is.
+
+`For Objects passed into methods, the REFERENCE to the object is passed BY VALUE`
+
+
+### The final keyword
+* In theory, the final keyword allows the Java compiler to potentially optimize the code  
+  In simple terms, if for example, an integer is declared as final say with a value of 5,  
+  as this value cannot be changed when the compiler compiles the code every time our integer reference appears  
+  `rather then the compiler having to say look up the variable of this value,   
+  it can just replace it with the value 5 instead every time it's referenced`  
+ 
+* The final keyword is not that the variable can never be changed,  
+  but that the variable can only be assigned once   
+
+* When we say that the final keyword means that a variable can only be assigned once,  
+  what we means is that when the variable in the stack is assigned to an object on the heap,  
+  then we cannot change which object in the heap this variable is pointing to
+ 
+
