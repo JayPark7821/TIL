@@ -13,6 +13,25 @@ public class CustomerRecords {
     }
 }
 ```
+
+```java
+public class Customer {
+
+    private String name;
+
+    public String getName() {
+        return name;
+    }
+    
+    public void setName(String name) {
+        this.name = name;
+    }
+  
+    public Customer(String name) {
+        this.name = name;
+    }
+}
+```
 * In the above sample code has a problem with getCoustomers method  
   getCustomers method returns a reference to the records map,
   which means that the calling code now obtains a reference to the records map and it can do anything with it
@@ -65,3 +84,52 @@ public class CustomerRecords {
     }
 }
 ```  
+
+* let's try to provide a read only copy of the Customer object
+
+```java
+interface ReadonlyCustomer {
+    String getName();
+}
+```  
+
+```java
+public class Customer implements ReadonlyCustomer {
+
+    private String name;
+
+    @Override
+    public String getName() {
+        return name;
+    }
+    
+    public void setName(String name) {
+        this.name = name;
+    }
+  
+    public Customer(String name) {
+        this.name = name;
+    }
+    public Customer(Customer customer) {
+        this.name = customer.getName();
+    }
+}
+```     
+
+```java
+public class CustomerRecords {
+    private Map<String, Customer> records;
+    
+    public void addCustomer(Customer c) {
+        this.records.put(c.getName(), c);
+    }
+    
+    public Map<String, Customer> getCustomers() {
+        return this.records;
+    }
+    
+    public ReadonlyCustomer find(String name) {
+        return new Customer(this.records.get(name));
+    }
+}
+```
