@@ -1,4 +1,4 @@
-## What happends inside the JVM
+## What happens inside the JVM
 * the code we write is compiled into bytecode by the java compiler
 * then the bytecode is executed by the JVM
 
@@ -161,7 +161,62 @@ public class PrimeNumbers {
 ` can change the threshold for native compilation with -XX:CompileThreshold={number of threshold}`
 
 
+### JVM Optimization
 
+* Are objects always created on the heap?
+  * We now know objects are stored on the heap,  
+    but What if the object is not going to be shared, if it's needed just for one method, just within one code block
+    then well it would be more efficient to have created that object on the stack instead of the heap.
+    in java as a developer, we don't have that choice, but modern JVMs are very efficient and very clever  
+    and if they detect that an object you're creating is not going to be shared, it doesn't go outside the code block in which it's created  
+    and at the end of the code block, the object can instantly be freed up and the memory can be released  
+    then the `JVM will in fact create that object on the stack instead of the heap.`  
 
+* String pool  
+```java
+public static void main(String[] args) {
+    String a = "hello";
+    String b = "hello";
+    System.out.println(a == b); // true
+    System.out.println(a.equals(b)); // true
+}
+```
+* What happens with strings is that the JVM puts them into a pool   
+  and it will reuse the objects in this pool whenever it can  
+  In general, this only happens with little Strings  
+  it won't happen with strings that are calculated from something else.
 
+```java
+public static void main(String[] args) {
+    String a = "hello";
+    String b = "hello";
+    System.out.println(a == b); // true
+    System.out.println(a.equals(b)); // true
+  
+    Integer i = 76;
+    String c = i.toString();
+    String d = "76";
+    System.out.println(c == d); // false
+    System.out.println(c.equals(d)); // true
+}
+```
+* There is a feature within the JVM that can actually detect these duplicated strings and it will remove one of them  
+  and make these two variables point to the same underlying reference. it's called String deduplication  
+  event though right now `c == d` returns false it's possible at some point in the future that it could return true  
+  because of this internal JVM optimization.
+
+* But actually we can also force JVM to put the string into the pool by using `intern` method  
+
+```java
+public static void main(String[] args) {
+
+  ...
+  
+    Integer i = 76;
+    String c = i.toString().intern();
+    String d = "76";
+    System.out.println(c == d); // true
+    System.out.println(c.equals(d)); // true
+}
+```
 
