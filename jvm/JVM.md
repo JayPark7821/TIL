@@ -220,3 +220,46 @@ public static void main(String[] args) {
 }
 ```
 
+* The way that these string pool is implemented is by using hash map
+  when a string is placed into the string pool in java, what happens is that a calculation takes place 
+  which uses the hash code of that string, and that calculation determines which bucket within the string pool the string needs to live in    
+  
+* This way of working, putting the strings in buckets based on their hash code is actually generally an efficient way of doing things  
+  whenever we want to add a new string into the string pool, what java needs to do is check to see whether that string is already in that string pool  
+  if it isn't then it can add it searching through every string in the pool to see if it already contains the same content as our new string could take quite a lot of time.
+  so rather than doing this, what java says is, well, if our string is already in the pool which bucket would it be in? and once it knows that,   
+  it only has to check the strings in that bucket to know if that string is there or not.  
+  if you know about hash codes, you'll know that two identical objects will always have the same hash code 
+   
+
+* There is a JVM flag that will give us some information about strings in our application and that flag is `-XX:+PrintStringTableStatistics`    
+![img_16.png](img_16.png)
+
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        Date start = new Date();
+
+        List<String> strings = new ArrayList<>();
+        for (int i = 1 ; i < 10_000_000; i++){
+            String s = String.valueOf(i).intern();
+            strings.add(s);
+        }
+
+        Date end = new Date();
+
+        System.out.println("Elapsed time " + ( end.getTime() - start.getTime()));
+    }
+}
+
+```  
+
+![img_17.png](img_17.png)
+
+* we can manage the size of the string pool with `-XX:StringTableSize`   
+  and for this to work in an optimal way, the number that you provide in this flag should be a prime number.
+
+* as a rough guidance, if the average bucket size is around about 40 ~ 50 or more it may well be worth playing with the number of buckets 
