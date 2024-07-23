@@ -28,4 +28,44 @@ String getAuthority();
 * A pre, & post invocation decision on whether the invocation is allowed to proceed is made by AuthorizationManager instances.
 
 #### AuthorizationManager
-* AuthorizationManagers are called by Spring Security’s request-based, method-based, and message-based authorization components and are responsible for making final access control decisions. 
+* AuthorizationManagers are called by Spring Security’s request-based, method-based, and message-based authorization components and are responsible for making final access control decisions.
+* The AuthorizationManager interface contains two methods:
+
+```java
+AuthorizationDecision check(Supplier<Authentication> authentication, Object secureObject);
+
+default AuthorizationDecision verify(Supplier<Authentication> authentication, Object secureObject) throws AccessDeniedException {
+    // ...
+}
+```
+
+* The AuthorizationManager's check method is passed all the relevant information it needs in order to make an authorization decision.
+* verify calls check and subsequently throws an AccessDeniedException in the case of a negative AuthorizationDecision.
+
+### Delegate-based AuthorizationManager Implementations
+
+* Spring Security ships with a delegating AuthorizationManager that can collaborate with individual AuthorizationManagers.
+
+![img_7.png](img_7.png)
+
+```java
+public class UserAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext> {
+
+	@Override
+	public AuthorizationDecision check(Supplier<Authentication> authentication, RequestAuthorizationContext context) {
+		HttpServletRequest request = context.getRequest();
+
+		Object principal = authentication.get().getPrincipal();
+		if (!(principal instanceof AuthenticationDetails)) {
+			return new AuthorizationDecision(false);
+		}
+
+		boolean accessible = ((AuthenticationDetails)principal).getAuthorities()
+			.stream()
+			.flatMap(authority -> RoleType.getPermittedUrlsBy(authority.getAuthority()).stream())
+			.anyMatch(url -> new AntPathRequestMatcher(url).matches(request));
+		
+		return new AuthorizationDecision(accessible);
+	}
+}
+```
