@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+    environment {
+        dev_server_build = "${currentBuild.number}"
+        PROFILE = 'dev'
+        registry_credentials = credentials('Container-Registry')
+
+    }
+    stages {
+        stage ('Checkout') {
+            steps {
+                dir('dev/server/project'){
+                    git branch: 'main',
+                    credentialsId: 'github-access-token',
+                    url: 'https://github.com/0000.git'
+                }
+            }
+        }
+
+        stage ('Preparation') {
+            steps {
+                dir('dev/server'){
+                    sh '''
+                        echo "Build: ${dev_server_build}"
+                        build_number=${dev_server_build}
+                        build_date=$(eval "date \"+%Y%m%d_%H%M\"")
+
+                        export TAG="${build_date}_${build_number}"
+                        eval "echo ${TAG} > tag.txt"
+
+                        echo "============================="
+                        echo "Build Number: ${build_number}"
+                        echo "Build Date: ${build_date}"
+                        echo "Container TAG: ${TAG}"
+                        echo "============================="
+                    '''
+                    script {
+                        TAG = readFile(file: 'tag.txt')
+                    }
+                }
+            }
+        }
+
+        stage ('Build'){
+            steps{
+                dir('dev/server/project'){
+                    sh '''
+                        export TAG=$(cat ../tag.txt)
+                        ./gradlew build
+                        docker build --build-arg ARG_PROFILE="${PROFILE}" -t registry/image:"${TAG}" .
+                        echo $registry_credentials_PSW | docker login registry -u $registry_credentials_USR --password-stdin
+                        docker push registry/image:"${TAG}"
+                    '''
+                }
+            }
+        }
+
+        stage ('Deploy'){
+            environment {
+                TAG = sh(script: 'cat ./dev/server/tag.txt', , returnStdout: true).trim()
+                HEALTH_CHECK_IP = '127.0.0.1'
+            }
+            steps{
+
+                sshagent (credentials: ['dev']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no user@${HEALTH_CHECK_IP} "echo registry_credentials_PSW | docker login registry -u $registry_credentials_USR --password-stdin"
+                        ssh -o StrictHostKeyChecking=no user@${HEALTH_CHECK_IP} "docker pull registry/image:${TAG}"
+                        scp dev/server/deploy-application.sh user@${HEALTH_CHECK_IP}:/tmp/deploy-application.sh
+
+                        ssh -o StrictHostKeyChecking=no user@${HEALTH_CHECK_IP} "chmod +x /tmp/deploy-application.sh"
+                        ssh -o StrictHostKeyChecking=no user@${HEALTH_CHECK_IP} "/tmp/deploy-application.sh ${PROFILE} ${TAG} ${HEALTH_CHECK_IP}"
+
+                    '''
+                }
+            }
+        }
+    }
+}
