@@ -74,3 +74,33 @@
   * 데이터 페이지 내부의 조각화 현상 커짐
   * CHAR 타입보다 공간 효율 떨어짐
   * 내부적으로 빈번한 page reorganization 작업 필요
+
+
+### Ep.02
+### VARCHAR vs TEXT
+* 공통점
+  * 문자열 속성 값을 저장
+  * 최대 65535 Bytes 까지 저장 가능
+* 차이점
+  * VARCHAR 타입 컬럼에는 지정된 글자 수 만큼만 데이터 저장 가능
+    * VARCHAR(10) -> 10글자 이하만 저장 가능
+  * TEXT 타입 걸렄은 인덱스 생성 시 반드시 Prefix 길이 지정 필요
+    * CREATE INDEX idx_name ON table_name (text_column(10));
+  * TEXT 타입 컬럼은 표현식으로만 디폴트 값 지정가능
+    * CREATE TABLE table_name (text_column TEXT DEFAULT 'default value'); -> error
+    * CREATE TABLE table_name (text_column TEXT DEFAULT ('default value')); -> success
+
+<br />   
+
+* 일반적인 사용 형태
+  * 길이가 짧으면 VARCHAR, 길이가 길면 TEXT
+* 그렇다면 CARCHAR(5000) vs TEXT ??? 
+  * MySQL에서는 세션에서 어떤 테이블에 저장된 데이터를 읽는다고 할 때 메모리에 이를 위한 버퍼 공간을 미리 할당해두고 그걸 유지하면서 재활용함,   
+  이 버퍼 공간은 테이블 레코드의 최대 사이즈로 메모리에 할당되는데 이때 VARCHAR 타입 컬럼의 경우 이 버퍼 공간에 포함돼서 메모리 공간을 재사용할 수 있지만   
+  텍스트 타입인 경우 그렇지 않고 그때그떄 필요할 때마다 메모리가 할당되고 해제됩니다.
+  * VARCHAR 타입은 메모리 버퍼 공간을 미리 할당해두며 재활용 가능, TEXT 타입은 그때 그때 필요할 때마다 할당 & 해제
+  * 컬럼 사용이 빈번하고 메모리 용령이 충분하다면 VARCHAR 타입 추천
+  * VARCHAR(5000)과 같이 길이가 긴 컬럼들을 자주 추가하는 경우, Row 사이즈 제한 (65,535 Byte)에 도달할 수 있으므로 적절하게 TEXT 타입과 같이 사용하는 것을 권장
+* VARCHAR(30) VS VARCHAR(255)
+  * 실제 최대 사용하는 길이만큼 명시해야 메모리 사용 효유율 증가
+  * 디스크 공간 효율 차이도 미미하게 존재 (1Byte vs 2Byte)
