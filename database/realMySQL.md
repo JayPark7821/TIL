@@ -140,3 +140,48 @@ where user_id = 7;
 * 상대적으로 저장되는 데이터 사이즈가 많이 크지 않고, 컬럼 사용이 빈번하며 DB서버의 메모리 용량이 충분하다면 VARCHAR 타입 권장
 * 저장되는 데이터 사이즈가 큰 편이고, 컬럼을 자주 사용하지 않으며 테이블에서 다른 문자열 컬럼들이 많이 사용된다면 TEXT 타입 권장
 * VARCHAR 타입을 사용하는 경우, 길이는 실제 사용되는 만큼만 지정
+
+### Ep.03
+### COUNT(*) vs COUNT(DISTINCT)
+#### COUNT(*) 성능 개선
+* Covering Index
+```sql
+select count(*) where ix_fd1=? and ix_fd2=?;
+select count(ix_fd2) where ix_fd1=?;
+```
+* Non-Covering Index
+```sql
+select count(*) where ix_fd1=? and non_ix_fd2=?;
+select count(non_ix_fd2) where ix_fd1=?;
+```
+#### COUNT(*) vs COUNT(DISTINCT expr)
+* COUNT(*)는 레코드 건수만 확인
+* COUNT(DISTINCT expr)는 임시 테이블로 중복 제거후 건수 확인  
+테이블 -> select(중복 여부 확인) -> insert or update -> 중복 제거용 임시 테이블  
+테이블의 레코드를 모두 임시 테이블로 복사 후 임시 테이블의 최종 레코드 건수 반환
+
+`만약 레코드 건수가 너무 많다면 MySQL 서버는 너무 큰 임시 테이블이 메모리에 상주하는것을 막기 위해서 적절한 타이밍에 다시 디스크에 옮겨 저장하는 작업을 진행 -> 메모리 cpu 뿐만 아니라 io 작업도 가중됨 성능 저하`
+
+#### COUNT(*) 튜닝
+* 최고의 튜닝은 쿼리 자체를 제거하는 것
+  * 전체 결과 건수 확인 쿼리 제거 
+  * 페이지 번호 없이, "이전" "이후" 페이지 이동
+* 쿼리를 제거할 수 없다면, 대략적 건수 활용
+  * 부분 레코드 건수 조회 
+    * 표시할 페이지 번호만큼의 레코드만 건수 확인  
+    select count(*) from (select 1 from table limit 200) z;
+  * 임의의 페이지 번호는 표기
+    * 첫 페이지에서 10개 페이지 표시 후 -> 실제 해당 페이지로 이동하면서 페이지 번호 보정
+  * 통계 정보 활용
+    * 쿼리 조건이 없는 경우, 테이블 통계 활용  
+    ```sql
+        select table_rows 
+        from information_schema.tables 
+        where schema_name= ? and table_name= ?;
+    ```
+    * 쿼리 조건이 있는 경우, 실행 계획 활용
+      * 정확도 낮음
+      * 조인이나 서브쿼리 사용시 계산 난이도 높음  
+  
+  * `성능은 빠르지만, 페이지 이동하면서 보정 필요` 
+    
