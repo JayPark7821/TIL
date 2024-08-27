@@ -238,3 +238,219 @@ where finished_at >= '2022-01-01' AND finished_at < '2022-01-02'
 * 배치보다는 주로 서비스 단에서 많이 사용되는 방식으로, 쿼리에서 ORDER BY와 LIMIT절을 사용하여 데이터를 조회
 * 처음 쿼리를 실행할 떄 (1회차)와 그 이후 쿼리를 실행할 때 (N회차) 쿼리 형태가 달라짐
 * 쿼리의 WHERE절에서 사용되는 조건 타입에 따라서 N회차 실행 시의 쿼리 형태도 달라짐
+
+<br/>
+
+#### 동등 조건 사용
+
+```sql
+CREATE TABLE payments
+(
+  id      int NOT NULL AUTO_INCREMENT,
+  user_id int NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_userid_id (user_id, id)
+);
+```
+ * 페이징 적용 대상 쿼리
+```sql
+SELECT *
+FROM payments
+WHERE user_id = ?
+```
+
+* 1회차 쿼리
+```sql
+SELECT *
+from payments
+WHERE user_id = ?
+ORDER BY id
+LIMIT 30
+```
+
+* N회차 쿼리
+```sql
+SELECT *
+from payments
+WHERE user_id = ? 
+  AND id > {마지막으로 조회한 id}
+ORDER BY id
+LIMIT 30
+```
+
+* ORDER BY절에는 각각의 데이터를 식별할 수 있 식별자 컬럼(PK와 같은 컬럼)이 반드시 포함되어야 함
+
+<br/>
+
+#### 범위 조건 사용
+
+
+```sql
+CREATE TABLE payments
+(
+  id      int NOT NULL AUTO_INCREMENT,
+  user_id int NOT NULL,
+  finished_at datetime NOT NULL,
+  
+  PRIMARY KEY (id),
+  KEY ix_finishedat_id (finished_at, id)
+);
+```
+* 페이징 적용 대상 쿼리
+```sql
+SELECT *
+FROM payments
+WHERE finished_at >= ?
+    AND finished_at < ?
+```
+
+* 1회차 쿼리
+```sql
+SELECT *
+from payments
+WHERE finished_at >= '{시작 날짜}'
+  AND finished_at < '{종료 날짜}'
+ORDER BY finished_at, id
+LIMIT 30
+``` 
+ 
+* 왜 ORDER BY 절에 finished_at 컬럼이 포함되어야 하는가?
+  * ORDER BY 절에 id 컬럼만 명시하는 경우 `조건을 만족하는 데이터들을 모두 읽어들인 후 id로 정렬한다음 지정된 건수만큼 반환 하게 됨`
+  * ORDER BY 절에 finished_at 컬럼을 선두에 명시하면, (finished_at, id) 인덱스를 사용해서 정렬 작업 없이 원하는 건수만큼 데이터를 순차적으로 읽을 수 있으므로 처리 효율 향상
+
+* 범위 조건에서의 N회차 쿼리
+  * 데이터  
+
+| finished_at         | id |
+|---------------------|----|
+| 2024-01-01 00:00:00 | 5  |
+| 2024-01-01 00:00:01 | 1  |
+| 2024-01-01 00:00:01 | 2  |
+| 2024-01-01 00:00:01 | 3  |
+| 2024-01-01 00:00:02 | 8  |
+| 2024-01-01 00:00:02 | 9  |
+| 2024-01-01 00:00:03 | 4  |
+| 2024-01-01 00:00:03 | 6  |
+
+  * 1회차 쿼리 예시   
+  ```sql
+    SELECT *
+    from payments
+    WHERE finished_at >= '2024-01-01 00:00:00'
+      AND finished_at < '2024-01-02 00:00:00'
+    ORDER BY finished_at, id
+    LIMIT 5
+  ```
+
+  * 결과  
+
+  | finished_at         | id |
+|---------------------|----|
+| 2024-01-01 00:00:00 | 5  |
+| 2024-01-01 00:00:01 | 1  |
+| 2024-01-01 00:00:01 | 2  |
+| 2024-01-01 00:00:01 | 3  |
+| 2024-01-01 00:00:02 | 8  |
+
+  * N회차 쿼리
+    * where절에 식별자 컬럼 조건 추가?
+    ```sql
+        SELECT *
+    from payments
+    WHERE finished_at >= '2024-01-01 00:00:00'
+      AND finished_at < '2024-01-02 00:00:00'
+      AND id > 8
+    ORDER BY finished_at, id
+    LIMIT 5
+    ```
+    * 결과
+    * 데이터 누락 발생 id 4 , 6
+    * 범위 조건에서 N회차 쿼리 작성
+    ```sql
+    SELECT *
+    FROM payments
+    WHERE ((finished_at = '2024-01-01 00:00:02' AND id > 8) OR (finished_at > '2024-01-01 00:00:02' AND finished_at < '2024-01-02 00:00:00'))
+    ORDER BY finished_at, id
+    LIMIT 5  
+    ```
+  * where절에 식별자 컬럼 조건만 추가해도 문제 없는 케이스
+  * data  
+
+| created_at          | id |
+|---------------------|----|
+| 2024-01-01 00:00:00 | 1  |
+| 2024-01-01 00:00:01 | 2  |
+| 2024-01-01 00:00:01 | 3  |
+| 2024-01-01 00:00:01 | 4  |
+| 2024-01-01 00:00:02 | 5  |
+| 2024-01-01 00:00:02 | 6  |
+| 2024-01-01 00:00:02 | 7  |
+| 2024-01-01 00:00:02 | 8  |
+
+  ```sql
+  SELECT *
+  FROM user_logs
+  WHERE created_at >= '2024-01-01 00:00:00'
+    AND created_at < '2024-01-02 00:00:00'
+  ORDER BY created_at, id
+  LIMIT 5
+  ```
+
+  ```sql
+  SELECT *
+  FROM user_logs
+  WHERE created_at >= '2024-01-01 00:00:02'
+    AND created_at < '2024-01-02 00:00:00'
+    AND id > 5
+  ORDER BY created_at, id
+  LIMIT 5
+  ```
+  * created_at, id 정렬 순서가 같은 경우 where절에 식별자 컬럼 조건만 추가해도 문제 없음  
+  * 범위 조건에서의 N회차 쿼리
+    * 범위 조건 컬럼과 식별자 컬럼의 값 순서 일치 여부에 따라 두 가지 방식이 존재
+    * 범위 조건 컬럼 값 순서와 식별자 컬럼 값 순서가 동일하지 않은 경우는 아래와 같이 사용
+    * 1 회차
+    ```sql
+    SELECT *
+    FROM payments
+    WHERE finished_at >= '{시작 날짜}'
+        AND finished_at < '{종료 날짜}'
+    ORDER BY finished_at, id
+    LIMIT 5
+    ```
+    * N 회차
+    ```sql
+    SELECT *
+    FROM payments
+    WHERE ((finished_at = '{이전 마지막 데이터의 날짜값}' AND id > '{이전 마지막 데이터의 id}') OR (finished_at > '{이전 마지막 데이터의 finished_at}' AND finished_at < '{종료 날짜}'))
+    ORDER BY finished_at, id
+    LIMIT 5
+    ```
+    * 범위 조건 컬럼 ㄱ밧 순서와 식별자 컬럼 값 순서가 동일한 경우는 아래와 같이 사용
+    * 1 회차
+    ```sql
+    SELECT *
+    FROM user_logs
+    WHERE created_at >= '{시작 날짜}'
+        AND created_at < '{종료 날짜}'
+    ORDER BY created_at, id
+    LIMIT 5
+    ```
+    * N 회차
+    ```sql
+    SELECT *
+    FROM user_logs
+    WHERE created_at >= '{이전 마지막 데이터의 날짜값}'
+        AND created_at < '{종료 날짜}'
+        AND id > '{이전 마지막 데이터의 id}'
+    ORDER BY created_at, id
+    LIMIT 5
+    ```
+#### 정리
+* LIMIT & OFFSET 구문은 DB서버 부하를 발생시키므로 사용을 지양
+* 페이징 쿼리는 대표적으로 두 가지로 구분할 수 있음
+  * 범위 기반 방식
+  * 데이터 개수 기반 방식
+* 범위 기반 방식은 단순하게 날짜/숫자 값을 특정 범위로 나눠서 쿼리를 실행하는 형태로 1회차와 N회차 쿼리 형태가 동일
+* 데이터 개수 기반 방식은 지정한 데이터 개수만큼 조회하는 형태로, 1회차와 N회차 쿼리 형태가 다름
+  * 쿼리에 사용되는 조건 타입에 따라, 또 경우에 따라 쿼리 형태가 달라지므로 페이징을 적용하고자 하는 쿼리에 맞는 형태로 페이징 쿼리 작성 필요
