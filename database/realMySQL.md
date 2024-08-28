@@ -454,3 +454,85 @@ LIMIT 30
 * 범위 기반 방식은 단순하게 날짜/숫자 값을 특정 범위로 나눠서 쿼리를 실행하는 형태로 1회차와 N회차 쿼리 형태가 동일
 * 데이터 개수 기반 방식은 지정한 데이터 개수만큼 조회하는 형태로, 1회차와 N회차 쿼리 형태가 다름
   * 쿼리에 사용되는 조건 타입에 따라, 또 경우에 따라 쿼리 형태가 달라지므로 페이징을 적용하고자 하는 쿼리에 맞는 형태로 페이징 쿼리 작성 필요
+
+
+### Ep.05
+### Stored Function
+#### MySQL Function
+* Built-in Function 
+* User Defined Function 
+* Stored Function 
+
+#### DETERMINISTIC vs NOT DETERMINISTIC
+* MySQL의 Stored Function은 반드시 DETERMINISTIC 과 NOT DETERMINISTIC 중 하나의 속성을 가진다
+* DETERMINISTIC ( 확정적 )
+  * 동일 상태와 동일 입력으로 호출 -> 동일한 결과 반환
+  * 그렇지 않은 경우 -> NOT DETERMINISTIC
+  * ex 오늘 가입한 사용자의 수를 가져오는 함수를 만들었을 때 stored function이 실행되는 도중에도 사용자의 가입은 계속 진행되기 때문에 이 함수는 호출 시점에 따라 결과가 달라질 수 있음  
+  하지만 이때 사용자 테이블의 레코드가 달라지는 것도 입력이 달라지는 것으로 해석
+
+* DETERMINISTIC 여부에 따른 차이
+```sql
+CREATE
+  DEFINER=root@'localhost'
+  FUNCTION func1() RETURNS INTEGER
+  DETERMINISTIC SQL SECURITY INVOKER
+BEGIN
+    SET @func1_called = IFNULL(@func1_called, 0) + 1;
+    RETURN 1;
+END;;
+
+CREATE
+  DEFINER=root@'localhost'
+  FUNCTION func2() RETURNS INTEGER
+  NOT DETERMINISTIC SQL SECURITY INVOKER
+BEGIN
+    SET @func2_called = IFNULL(@func2_called, 0) + 1;
+    RETURN 1;
+END;;
+```
+
+```sql
+SELECT * from tab where id = func1();
+SELECT * from tab where id = func2();
+
+SELECT @func1_called, @func2_called;
+```
+
+| @func1_called | @func2_called |
+|---------------|---------------|
+| 3             | 12            |
+
+* 두 세션 변수 값의 변화를 보면 func1은 3번 호출되었고 func2는 12번 호출되었음
+
+* DETERMINISTIC 여부에 따른 작동 차이
+```sql
+EXPLAIN SELECT * from tab where id = func1();
+
++----+-------------+-------+------+---------+---------+------+-------------+
+| id | select_type | table | type | key     | key_len | rows | Extra       |
++----+-------------+-------+------+---------+---------+------+-------------+
+| 1  | SIMPLE      | tab   | const| PRIMARY | 4       | 1    | NULL        |
++----+-------------+-------+------+---------+---------+------+-------------+
+
+Note (Code 1003): /* select#1 */ select '1' AS `id`, 'd' AS `COL` from `test`,`tab` where true
+```
+* Primary key를 const 타입으로 접근하는 것은 테이블의 레코드를 1건만 읽었다는 것을 의미하고 이는 매우 빠르게 처리되는 실행 계획
+* 실행 계획 하단의 노트에 명시된 query에서도 where절의 func1 함수 호출이 없어졌다 이는 최적화 되어서 함수 호출 자체가 사라졌다는 것을 의미
+```sql
+EXPLAIN SELECT * from tab where id = func2();
+
++----+-------------+-------+------+---------+---------+------+-------------+
+| id | select_type | table | type | key     | key_len | rows | Extra       |
++----+-------------+-------+------+---------+---------+------+-------------+
+| 1  | SIMPLE      | tab   | ALL  | NULL    | NULL    | 12    | USING WHERE|
++----+-------------+-------+------+---------+---------+------+-------------+
+
+Note (Code 1003): /* select#1 */ select `test`.`tab`.`id` AS `id`, `test`.`tab`.`col` AS `COL` from `test`,`tab` where (`test`.`tab`.`id` = func2())
+```
+* 실행 계획의 type이 ALL -> 풀 테이블 스캔으로 처리되었다는 것을 의미
+* 노트에 표시된 쿼리에서 where절의 func2 함수 호출이 그대로 남아있는 것을 확인할 수 있음
+
+<br/>
+
+* 사실 바로위 에서 NOT DETERMINISTIC의 함수의 호출 횟수가 높았던 이유는 쿼리 실행계획이 인덱스를 사용하지 못하고 풀 테이블 스캔으로 바뀌었기 때문이었음. 
