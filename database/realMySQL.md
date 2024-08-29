@@ -536,3 +536,70 @@ Note (Code 1003): /* select#1 */ select `test`.`tab`.`id` AS `id`, `test`.`tab`.
 <br/>
 
 * 사실 바로위 에서 NOT DETERMINISTIC의 함수의 호출 횟수가 높았던 이유는 쿼리 실행계획이 인덱스를 사용하지 못하고 풀 테이블 스캔으로 바뀌었기 때문이었음. 
+
+
+#### NOT DETERMINISTIC 최적화 이슈
+* NOT DETERMINISTIC 함수의 결과는 비확정적임
+  * 매번 호출 시점마다 결과가 달라질 수 있음
+    * 비교 기준 값이 상수가 아니고 변수임
+    * 매번 레코드를 읽은 후, WHERE절을 평가할 때마다 결과가 달라질 수 있음
+    * 인덱스에서 특정 값을 검색할 수 없음
+    * 인덱스 최적화 불가능
+
+#### NOT DETERMINISTIC 효과
+* NOT DETERMINISTIC Built-in Function
+  * RAND()
+  * NOW()
+  * UUID()
+  * SYSDATE()
+  * ....
+* NOT DETERMINISTIC Function 표현식
+  * WHERE col = (RAND() * 1000 )
+
+#### NOT DETERMINISTIC 예외
+* NOW() vs SYSDATE()
+  * 동일하게 현재 일자와 시간 반환하는 함수 
+  * 둘 모두 NOT DETERMINISTIC 함수
+  * 하지만
+    * NOW()는 DETRMINISTIC 처럼 작동
+    * NOW()는, 하나의 Statement내에서는 Statement의 시작 시점 반환
+    * SYSDATE()는, NOT DETEMINISTIC
+    * SYSDATE()는, 매번 호출 시점마다 해당 시점 반환
+    
+
+```sql
+SELECT NOW(), SYSDATE(), SLEEP(1)
+FROM tab LIMIT 10;
+
++---------------------+---------------------+
+| NOW()               | SYSDATE()           |
++---------------------+---------------------+
+| 2022-01-01 00:00:01 | 2022-01-01 00:00:01 |
+| 2022-01-01 00:00:01 | 2022-01-01 00:00:02 |
+| 2022-01-01 00:00:01 | 2022-01-01 00:00:03 |
+....
+| 2022-01-01 00:00:01 | 2022-01-01 00:00:04 |
+| 2022-01-01 00:00:01 | 2022-01-01 00:00:05 |
++---------------------+---------------------+
+```
+
+* 사실 NOW()와 SYSDATE()는 모두 NOT DETERMINISTIC 함수이지만, NOW()는 하나의 문장 안에서는 DETERMINISTIC 함수처럼 작동 
+
+```sql
+ADD INDEX ix_created_at (created_at);
+SELECT * from tab where created_at = NOW();
+SELECT * from tab where created_at = SYSDATE();
+```
+* NOW()는 하나의 문장 안에서는 DETERMINISTIC 함수처럼 작동하므로 인덱스를 사용할 수 있음 
+* SYSDATE()는 매번 호출 시점마다 다른 값을 반환하므로 인덱스를 사용할 수 없음 풀 테이블 스캔
+
+
+<br/>
+
+* sysdate-is-now 설정 -> SYSDATE()가 NOW()처럼 동작하도록 설정
+
+
+#### Stored Function 주의 사항
+* 기본 NOT DETEMINISTIC  Stored Function
+  * 옵션이 명시되지 않으면, 기본적으로 NOT DETERMINISTIC 속성을 가짐
+  * StoredFunction 생성시 기본 옵션 꼭 명시
