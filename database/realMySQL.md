@@ -603,3 +603,71 @@ SELECT * from tab where created_at = SYSDATE();
 * 기본 NOT DETEMINISTIC  Stored Function
   * 옵션이 명시되지 않으면, 기본적으로 NOT DETERMINISTIC 속성을 가짐
   * StoredFunction 생성시 기본 옵션 꼭 명시
+
+
+
+### Ep.06
+### Lateral Derived Table
+#### Lateral Derived Table 이란
+* Derived Table(파생 테이블)은 쿼리의 FROM 절에서 서브쿼리를 통해 생성되는 임시 테이블을 의미
+* 일반적으로 Derived Table은 선행 테이블의 컬러럼을 참조할 수 없으나, Lateral Derived Table은 참조 가능
+* 정의된 Derived Table 앞부분에 LATERAL 키워드를 추가해서 사용
+* 참조한 값을 바탕으로 동적으로 결과 생성
+
+#### 동작 방식
+```sql
+SELECT e.emp_no, s.sales_count, s.total_sales
+FROM employees e 
+LEFT JOIN LATERAL (
+  SELECT COUNT(*) AS sales_count, 
+         IFNULL(SUM(total_price), 0) AS total_sales
+  FROM sales
+  WHERE emp_no = e.emp_no
+) s ON TRUE;
+
+
+
++----+-----------------------+-------------+---------------------+-------------+-------------+-------------+--------------------------------------------+
+| id | select_type           | table       | type                | key         | ref         | rows        | extra                                      |
++----+-----------------------+-------------+---------------------+-------------+-------------+-------------+--------------------------------------------+
+| 1  | PRIMARY               | e           | index               | PRIMARY     | NULL        | 300473      | Using index; Rematerialize (<derived2>)    |
+| 1  | PRIMARY               | <derived2>  | ALL                 | NULL        | NULL        | 2           | NULL                                       |
+| 2  | DEPENDENT DERIVED     | sales       | ix_empno_totalprice |test.e.emp_no|test.e.emp_no| 1           | Using index                                |
+
+```
+
+#### 활용 예제 (1) 종속 서브 쿼리의 다중 값 반환
+* 부서별 가장 먼저 입사한 직원의 입사일과 직원 이름을 조회 한다고 가정
+
+```sql
+SELECT d.dept_name,
+       (SELECT e.hire_date as earliest_hire_date,
+                CONCAT(e.first_name, ' ', e.last_name) AS full_name
+        FROM dept_emp de 
+        INNER JOIN employees e ON de.emp_no = e.emp_no
+        WHERE de.dept_no = d.dept_no
+        ORDER BY e.hire_date LIMIT 1)
+FROM departments d;
+
+=> ERROR 1241 (21000): Operand should contain 1 column(s)
+```
+
+* Lateral Derived Table을 사용하여 해결
+```sql
+SELECT d.dept_name, 
+       x.earliest_hire_date, 
+       x.full_name
+FROM departments d
+INNER JOIN LATERAL (
+    SELECT e.hire_date AS earliest_hire_date, 
+             CONCAT(e.first_name, ' ', e.last_name) AS full_name
+    FROM dept_emp de
+    INNER JOIN employees e ON de.emp_no = e.emp_no
+    WHERE de.dept_no = d.dept_no
+    ORDER BY e.hire_date
+    LIMIT 1
+  ) X
+```
+
+* FROM 절에서 LATERAL 키워드를 사용해 하나의 서브쿼리로 원하는 값들을 모두 조회
+* MySQL에서는 LEFT JOIN과 달리 INNER JOIN은 ON 절이 선택 사항 즉 문법 규칙을 지기키 위해 ON TRUE 생략 가능
