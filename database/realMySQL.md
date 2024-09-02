@@ -671,3 +671,94 @@ INNER JOIN LATERAL (
 
 * FROM 절에서 LATERAL 키워드를 사용해 하나의 서브쿼리로 원하는 값들을 모두 조회
 * MySQL에서는 LEFT JOIN과 달리 INNER JOIN은 ON 절이 선택 사항 즉 문법 규칙을 지기키 위해 ON TRUE 생략 가능
+
+#### 활용 예제 (2) select 절 내 연산 결과 반복 참조
+* 일별 매출 데이터 조회 쿼리
+```sql
+SELECT ( total_sales * margin_rate) AS profit,
+       ((total_sales * margin_rate) / total_sales_number ) AS avg_profit,
+       (expected_sales * margin_rate) AS expected_profit,
+       ((total_sales * margin_rate) / (expected_sales * margin_rate) * 100) AS sales_achievement_rate
+FROM daily_revenue
+WHERE sales_date = '2023-12-01';
+```
+* select문 내에서 연산 결과를 참조하기 위해 동일한 연산을 중복 기재해서 사용
+* Lateral Derived Table을 사용하여 해결
+```sql
+SELECT profit,
+       avg_profit,
+       expected_profit,
+       sales_achievement_rate
+FROM daily_revenue,
+     LATERAL (SELECT (total_sales * margin_rate) AS profit) p,
+     LATERAL (SELECT (profit / total_sales_number) AS avg_profit) ap,
+     LATERAL (SELECT (expected_sales * margin_rate) AS expected_profit) ep,
+     LATERAL (SELECT (profit / expected_profit * 100) AS sales_achievement_rate) sar
+WHERE sales_date = '2023-12-01';
+```
+* FROM 절에서 LATERAL 키워드를 사용해 연산 결과 값을 직접 참조
+
+#### 활용 예제 (3) 선행 데이터를 기반으로 한 데이터 분석
+* 처음 서비스에 가입하고나서 일주일내로 결제 완료한 사용자의 비율
+  * 2024년 1월에 가입한 유저들을 대상으로 분석
+  * 사용자 관련 이벤트 데이터를 저장하는 user_events 테이블을 활용 (약 50만건)
+
+```sql
+CREATE TABLE user_events
+(
+    id         int         NOT NULL AUTO_INCREMENT,
+    user_id    int         NOT NULL,
+    event_type varchar(50) NOT NULL, 
+  ......,
+    created_at datetime    NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_eventtype_userid_createdat (event_type, user_id, created_at),
+);
+```
+ * 2024년 1월에 가입한 사용자들 중 일주일내로 결제까지 완료한 사용자의 비율
+ * 2024년 1월에 가입한 유저 목록 -> user_id, created_at -> 일주일 내 결제 유무 확인
+
+```sql
+SELECT SUM(sign_up) AS signed_up,
+       SUM(complete_purchase) AS completed_purchase,
+       (SUM(complete_purchase) / SUM(sign_up) * 100) AS conversion_rate
+FROM (SELECT user_id AS sign_up, MIN(created_at) AS sign_up_time
+      FROM user_events
+      WHERE event_type = 'SIGN_UP'
+        AND created_at >= '2024-01-01 00:00:00'
+        AND created_at < '2024-02-01 00:00:00'
+      GROUP BY user_id) e1 
+  LEFT JOIN (SELECT 1 AS complete_purchase, MIN(created_at) AS complete_purchase_time
+             FROM user_events
+             WHERE event_type = 'COMPLETE_PURCHASE'
+             GROUP BY user_id
+
+) e2 ON e2.user_id = e1.user_id
+WHERE e2.complete_purchase_time >= e1.sign_up_time
+  AND e2.complete_purchase_time < DATE_ADD(e1.sign_up_time, INTERVAL 7 DAY);
+```
+
+* Lateral Derived Table을 사용하여 해결
+```sql
+SELECT SUM(sign_up)                                  AS signed_up,
+       SUM(complete_purchase)                        AS completed_purchase,
+       (SUM(complete_purchase) / SUM(sign_up) * 100) AS conversion_rate
+FROM (SELECT user_id AS sign_up, MIN(created_at) AS sign_up_time
+      FROM user_events
+      WHERE event_type = 'SIGN_UP'
+        AND created_at >= '2024-01-01 00:00:00'
+        AND created_at < '2024-02-01 00:00:00'
+      GROUP BY user_id) e1
+       LEFT JOIN LATERAL (
+  SELECT 1 AS complete_purchase
+  FROM user_events
+  WHERE user_id = e1.user_id
+    AND event_type = 'COMPLETE_PURCHASE'
+    AND created_at >= e1.sign_up_time
+    AND created_at < DATE_ADD(e1.sign_up_time, INTERVAL 7 DAY)
+  ORDER BY event_type, user_id, created_at
+  LIMIT 1
+  ) e2 ON TRUE;
+```
+* 일반 Derived Table 사용한 쿼리 -> 0.46 sec
+* Lateral Derived Table 사용한 쿼리 -> 0.08 sec
