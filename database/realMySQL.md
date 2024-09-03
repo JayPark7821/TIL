@@ -762,3 +762,67 @@ FROM (SELECT user_id AS sign_up, MIN(created_at) AS sign_up_time
 ```
 * 일반 Derived Table 사용한 쿼리 -> 0.46 sec
 * Lateral Derived Table 사용한 쿼리 -> 0.08 sec
+
+
+#### 활용 예제 (4) Top N 데이터 조회
+* 카테고리별 조회수가 가장 높은 3개 기사 추출
+```sql
+CREATE TABLE categories(
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(50) NOT NULL,
+    PRIMARY KEY (id)
+);
+```
+
+```sql
+CREATE TABLE articles(
+    id int NOT NULL AUTO_INCREMENT,
+    category_id int NOT NULL,
+    title varchar(100) NOT NULL,
+    views int NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_categoryid_views (category_id, views)
+);
+```
+
+* 카테고리별 조회수가 가장 높은 3개 기사 추출
+```sql
+SELECT x.name, x.title, x.views
+FROM (
+  SELECT c.name, a.title, a.views,
+            ROW_NUMBER() OVER 
+            (PARTITION BY a.category_id ORDER BY a.views DESC) AS article_rank
+    FROM categories c
+    INNER JOIN articles a ON c.id = a.category_id
+) x
+WHERE x.article_rank <= 3;
+```
+
++----+-----------------------+-------------+---------------------+-------------+-----------------+--------------------------+-------------+--------------------------------------------+
+| id | select_type           | table       | type                | key         | key_len         | ref                       | rows        | extra                                     |
++----+-----------------------+-------------+---------------------+-------------+-----------------+--------------------------+-------------+--------------------------------------------+
+| 1  | PRIMARY               | <derived2>  | ALL                 | NULL        | NULL            | NULL                     | 996030      | Using where                                |
+| 2  | DERIVED               | a           | ALL                 | NULL        | NULL            | NULL                     | 996030      | Using temporary; Using filesort            |
+| 2  | DERIVED               | c           | eq_ref              | 4           | 4               | test.a.category_id       | 1           | NULL                                       |
++----+-----------------------+-------------+---------------------+-------------+-----------------+--------------------------+-------------+--------------------------------------------+
+
+* Lateral Derived Table을 사용하여 개선
+```sql
+SELECT c.name, a.title, a.views
+FROM categories c
+INNER JOIN LATERAL (
+  SELECT category_id, title, views
+  FROM articles 
+  WHERE category_id = c.id
+  ORDER BY category_id DESC, views DESC
+  LIMIT 3
+) a ON TRUE;
+```
+
++----+-----------------------+-------------+---------------------+---------------------+-----------------+--------------------------+-------------+--------------------------------------------+
+| id | select_type           | table       | type                | key                 | key_len         | ref                       | rows        | extra                                     |
++----+-----------------------+-------------+---------------------+---------------------+-----------------+--------------------------+-------------+--------------------------------------------+
+| 1  | PRIMARY               | c           | ALL                 | NULL                | NULL            | NULL                     | 10          | Rematerialize (<derived2>)                 |
+| 2  | PRIMARY               | <derived2>  | ALL                 | NULL                | NULL            | NULL                     | 3           | NULL                                       |
+| 2  | DEPENDENT DERIVED     | articles    | ref                 | ix_categoryid_views | 4               | test.c.id                | 110670      | Backward index scan                        |
++----+-----------------------+-------------+---------------------+---------------------+-----------------+--------------------------+-------------+--------------------------------------------+
