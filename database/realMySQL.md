@@ -798,6 +798,7 @@ FROM (
 WHERE x.article_rank <= 3;
 ```
 
+```sql
 +----+-----------------------+-------------+---------------------+-------------+-----------------+--------------------------+-------------+--------------------------------------------+
 | id | select_type           | table       | type                | key         | key_len         | ref                       | rows        | extra                                     |
 +----+-----------------------+-------------+---------------------+-------------+-----------------+--------------------------+-------------+--------------------------------------------+
@@ -805,7 +806,8 @@ WHERE x.article_rank <= 3;
 | 2  | DERIVED               | a           | ALL                 | NULL        | NULL            | NULL                     | 996030      | Using temporary; Using filesort            |
 | 2  | DERIVED               | c           | eq_ref              | 4           | 4               | test.a.category_id       | 1           | NULL                                       |
 +----+-----------------------+-------------+---------------------+-------------+-----------------+--------------------------+-------------+--------------------------------------------+
-
+```
+                                                                                                                                                             
 * Lateral Derived Table을 사용하여 개선
 ```sql
 SELECT c.name, a.title, a.views
@@ -819,6 +821,7 @@ INNER JOIN LATERAL (
 ) a ON TRUE;
 ```
 
+```sql
 +----+-----------------------+-------------+---------------------+---------------------+-----------------+--------------------------+-------------+--------------------------------------------+
 | id | select_type           | table       | type                | key                 | key_len         | ref                       | rows        | extra                                     |
 +----+-----------------------+-------------+---------------------+---------------------+-----------------+--------------------------+-------------+--------------------------------------------+
@@ -826,3 +829,50 @@ INNER JOIN LATERAL (
 | 2  | PRIMARY               | <derived2>  | ALL                 | NULL                | NULL            | NULL                     | 3           | NULL                                       |
 | 2  | DEPENDENT DERIVED     | articles    | ref                 | ix_categoryid_views | 4               | test.c.id                | 110670      | Backward index scan                        |
 +----+-----------------------+-------------+---------------------+---------------------+-----------------+--------------------------+-------------+--------------------------------------------+
+```
+
+
+
+### Ep.07
+### SELECT ... FOR UPDATE
+#### SELECT (REPEATABLE READ) 
+* Non-Locking consistent read (MVCC)
+* 순수 SELECT는 트랜잭션 가시 범위의 데이터 반환
+* 필요시 Undo의 변경 이력 참조
+
+![img_7.png](img_7.png)
+
+* SELECT .. FOR [UPDATE | SHARE ]
+  * 격리 수준과 무관하게 항상 select 시점의 최신 커밋 데이터 조회  
+  * 단순 SELECT와 다른 결과 반환 가능함  
+  
+![img_8.png](img_8.png)
+
+* SELECT ... FOR SHARE = S-lock
+  * 부모 테이블의 레코드 삭제 방지
+  * 부모 테이블의 SELECT와 자식 테이블의 INSERT 시점 사이에, 부모 삭제 방지 
+
+```sql
+BEGIN;
+SELECT * FROM article WHERE article_id = 'A' FOR SHARE;
+
+/* 부모 테이블인 article 확인 후, 자식 테이블인 comment 테이블의 레코드 INSERT */
+if(article.canAddComment()){
+    INSERT INTO comment (....) VALUES ('A', ...);
+    COMMIT;
+}else{
+   ROLLBACK; 
+}
+```
+* 만약 SELECT ... FOR SHARE를 사용하지 않으면, SELECT * FROM article WHERE article_id = 'A' 직후 부모 테이블의 레코드가 삭제가능
+
+* SELECT ... FOR SHARE = S-lock
+* UPDATE & SELECT ... FOR UPDATE = X-lock
+* SELECT ... FOR SHARE 이후 UPDATE & DELETE 필요한 경우 FOR SHARE 사용 자제 
+  * Lock upgrade 필요 S-lock -> X-lock
+  * Deadlock 가능성 높음
+
+#### Lost Update Anomaly
+* 아래의 경우, 계좌 잔액이 음수가 되는 문제 발생  
+![img_9.png](img_9.png)    
+![img_10.png](img_10.png)
