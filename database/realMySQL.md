@@ -876,3 +876,66 @@ if(article.canAddComment()){
 * 아래의 경우, 계좌 잔액이 음수가 되는 문제 발생  
 ![img_9.png](img_9.png)    
 ![img_10.png](img_10.png)
+
+
+### Ep.08
+### Generated 컬럼 & 함수 기반 인덱스
+#### Generated column 이란?
+* '표현식' 으로 정의된 컬럼
+* 정의된 '표현식'에 따라 컬럼의 값이 자동으로 생성
+  * '표현식' = 고정된 값, 함수 또는 다른 컬럼들에 대한 연산 조합 등이 해당
+* 사용자가 직접 값을 입력하거나 변경할 수 없음
+* 두 가지 종류가 존재
+  * Virtual Generated Column
+  * Stored Generated Column 
+
+#### Generated Column 생성  
+![img_11.png](img_11.png)  
+     
+```sql
+ALTER TABLE test ADD COLUMN generated_column AS (col1 + col2) VIRTUAL;
+```
+* 기본적으로 VIRTUAL 타입으로 생성 & NULL 값 허용
+* PRIMARY KEY로는 STORED 타입만 허용
+* 하나의 테이블에서 가상 컬럼과 스토어드 컬럼 혼합해서 사용 가능
+
+#### 가상 컬럼 (Virtual Generated Column)
+```sql
+CREATE TABLE tb_virtual_column(
+    id int NOT NULL AUTO_INCREMENT,
+    price int NOT NULL DEFAULT '0',
+    quantity int NOT NULL DEFAULT '0',
+    total_price int GENERATED ALWAYS AS (price * quantity) VIRTUAL,
+    PRIMARY KEY (id),
+    KEY ix_total_price (total_price)
+)
+```
+* 컬럼의 값을 디스크에 저장하지 않음
+* 컬럼의 값은 레코드가 읽히기 전 또는 BEFORE 트리거 실행 직후에 계산됨
+* 인덱스 생성 가능
+  * 인덱스 데이터는 디스크에 저장됨
+
+#### 스토어드 컬럼 (Stored Generated Column)
+```sql
+CREATE TABLE tb_stored_column(
+    id int NOT NULL AUTO_INCREMENT,
+    price int NOT NULL DEFAULT '0',
+    quantity int NOT NULL DEFAULT '0',
+    total_price int GENERATED ALWAYS AS (price * quantity) STORED,
+    PRIMARY KEY (id),
+    KEY ix_total_price (total_price)
+)
+```
+* 컬럼의 값을 디스크에 저장
+* 컬럼의 값은 레코드가 INSERT 되거나 UPDATE 될 떄 계산되어 저장
+* 인덱스 생성 가능
+
+#### Generated Column DDL 작업
+* ALTER 명령으로 ADD/MODIFY/CHANGE/DROP/RENAME 가능
+* 일반 컬럼을 스토어드 커럼으로, 스토어드 컬럼을 일반 컬럼으로 변경 가능
+  * 가상 컬럼은 일반 컬럼으로 전환 불가
+* 스토어드 컬럼 <-> 가상 컬럼 간 변경 불가.
+  * 새로 컬럼을 추가하고 삭제하는 방식으로만 전환 가능  
+
+![img_12.png](img_12.png)
+
