@@ -939,3 +939,95 @@ CREATE TABLE tb_stored_column(
 
 ![img_12.png](img_12.png)
 
+* 가상 컬럼 추가 또는 변경 시(ADD/CHANGE/MODIFY) 사용 가능한 유효성 검사 옵션
+  * WITHOUT VALIDATION
+    * 기본 설정
+    * 기존 데이터 무결성 확인하지 않으며, 가능한 경우 in-place 방식으로 작업 수행
+    * 계산된 값이 컬럼의 값 범위를 벗어날 수 있음 (경고 또는 에러 발생 가능)
+  * WITH VALIDATION
+    * 테이블 데이터 복사 수행
+    * 작업 중 DML 유입 시 잠금 대기 (메타데이터 락 대기 ) 발생
+    * 작업 시 계산된 값이 컬럼의 값 범위를 벗어나는 경우 명령문 실패
+
+* 유효성 검사 예제
+```sql
+CREATE TABLE t1(
+    id int NOT NULL AUTO_INCREMENT,
+    col1 varchar(10) DEFAULT NULL,
+    col2 int DEFAULT NULL,
+    PRIMARY KEY (id)
+);
+```
+
+```sql
+mysql > SELECT *
+        FROM t1;
++----+------+------+
+| id | col1 | col2 |
++----+------+------+
+| 1  | abcd | 1234 |
++----+------+------+
+
+mysql > ALTER TABLE t1
+        ADD COLUMN v_col int AS (CAST(CONCAT(col1, col2) AS UNSIGNED )) VIRTUAL,
+        WITHOUT VALIDATION;
+Query OK, 0 rows affected (0.01 sec)
+# WITHOUT VALIDATION 입력시 문제 없이 적용
+mysql > SELECT * 
+        FROM t1;
++----+------+------+-------+
+| id | col1 | col2 | v_col |
++----+------+------+-------+
+| 1  | abcd | 1234 | 0     |
++----+------+------+-------+
+```
+
+```sql
+mysql > ALTER TABLE t1
+        ADD COLUMN v_col int AS (CAST(CONCAT(col1, col2) AS UNSIGNED )) VIRTUAL,
+        WITH VALIDATION;
+ERROR 1292 (22007): Truncated incorrect INTEGER value: 'abcd1234'
+```
+
+
+#### 인덱스 사용
+* 일반 컬럼과 동일하게 쿼리에서 인덱스 사용 가능
+* 쿼리에 Generated 컬럼명 대신 표현식을 사용해도 인덱스 사용 가능
+* 대신 표현식은 컬럼에 정의된 표현식과 완전히 일치해야 함
+  * 컬럼에는 (col1 + 1)로 정의했으나, 쿼리에서 (col1 + 2)로 사용 시 인덱스 사용 불가
+* 또한 주어진 조건값과 컬럼 타입도 동일해야 함
+* =, <, <=,>,>=, BETWEEN, IN 연상자 사용 시 이러한 최적화가 적용됨
+* Generated 컬럼명을 조건절에 사용
+```sql
+CREATE TABLE product(
+    id int NOT NULL AUTO_INCREMENT,
+    price int NOT NULL DEFAULT '0',
+    quantity int NOT NULL DEFAULT '0',
+    total_price int GENERATED ALWAYS AS (price * quantity) VIRTUAL ,
+    PRIMARY KEY (id),
+    KEY ix_total_price (total_price)
+)
+
+mysql > EXPLAIN SELECT * FROM product WHERE total_price >= 30000 AND total_price < 50000;
++----+-------------+---------+------+----------------+---------+------+------+-------------+
+| id | select_type | table   | type |  key           | key_len | ref  | rows | Extra       |
++----+-------------+---------+------+----------------+---------+------+------+-------------+
+| 1  | SIMPLE      | product | range| ix_total_price | 5       | NULL| 3057 | Using where |
+```
+* 표현식을 조건절에 사용
+```sql
+mysql > EXPLAIN SELECT * FROM product WHERE price * quantity >= 30000 AND price * quantity < 50000;
++----+-------------+---------+------+----------------+---------+------+------+-------------+
+| id | select_type | table   | type |  key           | key_len | ref  | rows | Extra       |
++----+-------------+---------+------+----------------+---------+------+------+-------------+
+| 1  | SIMPLE      | product | range| ix_total_price | 5       | NULL| 3057 | Using where |
+
+```
+* Generated 컬럼의 표현식과 완전히 동일한 형태 & 타입이여야 인덱스 사용 가능
+
+#### 제한 사항
+* 표현식에 아래 항목들은 사용 불가
+  * 비결정적 함수, 스토어드 프로그램, 변수
+  * 서브 쿼리
+* INSERT/UPDATE시 Generated 컬럼에 직접 값을 지정할 수 없으며, 지정할 수 있는 값은 DEFAULT 만 가능
+* 트리거에서 NEW.col_name이나 OLD.col_name으로 Generated 컬럼을 참조 가능
