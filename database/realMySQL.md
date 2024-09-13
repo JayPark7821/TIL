@@ -1031,3 +1031,88 @@ mysql > EXPLAIN SELECT * FROM product WHERE price * quantity >= 30000 AND price 
   * 서브 쿼리
 * INSERT/UPDATE시 Generated 컬럼에 직접 값을 지정할 수 없으며, 지정할 수 있는 값은 DEFAULT 만 가능
 * 트리거에서 NEW.col_name이나 OLD.col_name으로 Generated 컬럼을 참조 가능
+
+
+#### Function Based Index
+* 일반 인덱스는 컬럼 또는 컬럼의 Prefix만 인덱싱 가능
+  * CREATE INDEX ix_col1 ON tab (col1);
+  * CREATE INDEX ix_col20 ON tab (col(20));
+* 함수 기반 인덱스는 "표현식"을 인덱싱 값으로 사용 가능
+  * CREATE INDEX f_index on tab ((col1+col2), (col1 * col2));
+  * CREATE INDEX f_index on tab (DATE(col1));
+* 쿼리의 조건절에서 컬럼을 가공하는 경우에 유용하게 사용 가능
+  * 사용하는 쿼리 -> SELECT * FROM tab WHERE (col1 + col2) > 10;
+  * 쿼리를 위한 인덱스 -> CREATE INDEX f_index on tab ((col1 + col2));
+
+#### 동작 방식
+* Virtual Generated Column을 자동 생성 후 인덱싱
+  * 자동 생성된 Virtual 컬럼은 일반적인 환경에서는 확인 불가.
+  * 가상 컬럼의 이름은 '!hidden!index_name!key_part!counter' 형태로 지정되며, 타입도 자동 지정됨.
+
+```sql
+mysql > CREATE TABLE tb1 (col1 int, KEY ix_test ( (abs(col1))));
+
+mysql > SET SESSION  debud="+d,show_hidden_columns";
+
+mysql > SHOW CREATE TABLE tb1;
+
+CREATE TABLE `tb1` (
+    `col1` int DEFAULT NULL,
+    `!hidden!ix_test!0!0` int GENERATED ALWAYS AS (abs(`col1`)) VIRTUAL,
+    KEY `ix_test` ((abs(`col1`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```
+
+#### Function Based Index 사용 방법
+* 각각의 표현식은 반드시 괄호로 묶어서 명시
+  * CREATE INDEX ix_test ON tb1 ((abs(col1)), (col1 * col2));
+* 일반 컬럼과 함께 복합 인덱스로도 구성 가능
+  * CREATE INDEX ix_test ON tb1 (col1, (abs(col2)), (col1 * col2));
+* 표현식 값에 대해 ASC & DESC 지정 가능
+* UNIQUE 설정 가능
+
+#### 활용 예시
+* 문자열 값의 특정 부분에 대해서 조회
+```sql
+CREATE INDEX ix_email_domain on users (( SUBSTRING_INDEX(email, '@', -1)));
+
+CREATE INDEX ix_address_depth2 on stores (( SUBSTRING_INDEX(address, ' ', 2), ' ', -1));
+```
+
+* 일/월/연도 별 조회
+```sql
+CREATE INDEX ix_createdat_day ON evnets ((DAY(created_at)));
+CREATE INDEX ix_createdat_month ON evnets ((MONTH(created_at)));
+CREATE INDEX ix_createdat_year ON evnets ((YEAR(created_at)));
+```
+
+* 대소문자 구분 없이 문자열 검색
+```sql
+CREATE INDEX ix_title on books ((LOWER(title)));
+```
+
+* 계산된 값 조회 
+```sql
+CREATE INDEX ix_discounted_price on products ((price * (1 - discount_rate)));
+```
+
+* 해싱된 값 조회 
+```sql
+CREATE INDEX ix_hashed_id on users ((MD5(id)));
+```
+
+
+#### 주의사항
+* 인덱스 생성 후 실행 계획을 반드시 확인
+  * 표현식을 정확하게 동일한 형태로 명시해야 인덱스 사용가능
+* 표현식 결과의 데이터 타입을 명확하게 확인해서 조건값 지정 
+  * mysql --column-type-info 옵션 사용
+* 기본적으로 일반 인덱스보다 추가적인 계산 비용이 발생
+  * 변경이 잦은 컬럼 & 복잡한 표현식 사용 시 오버헤드가 커질 수 있음.
+
+#### 제한 사항
+* 표현식에 비결정적(Non-deterministic) 함수 사용 불가
+* 일반 컬럼 및 Prefix 길이 지정된 컬럼은 키 값으로 지정 불가.
+  * 괄호 없이 사용하거나, SUBSTRING 또는 CAST 함수를 사용
+* 공간 인덱스나 전문검색 인덱스는 지원하지 않음
+* Primary Key에 표현식은 포함 불가
