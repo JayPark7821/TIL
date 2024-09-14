@@ -1116,3 +1116,69 @@ CREATE INDEX ix_hashed_id on users ((MD5(id)));
   * 괄호 없이 사용하거나, SUBSTRING 또는 CAST 함수를 사용
 * 공간 인덱스나 전문검색 인덱스는 지원하지 않음
 * Primary Key에 표현식은 포함 불가
+
+### Ep.08
+### Error Handling
+#### MySQL 에러 구분
+* Global Error
+  * Server-side & Client-side에서 공용으로 발생
+* Server Error
+  * Server-side에서만 발생
+* Client Error
+  * Client-side에서만 발생
+
+* 일부 Server Error는 Client-side로 전달
+  * Client-side에서 보여지는 에러는 Client 또는 Server Error일 수 있음
+  * Client Error
+```shell
+  mysql -h no-such-host -u root
+    ERROR 2005 (HY000): Unknown MySQL server host 'no-such-host' (0)
+```
+  * Server Error
+```shell
+  mysql > select * from no_such_table;
+  ERROR 1146 (42S02): Table 'test.no_such_table' doesn't exist
+```
+
+
+#### MySQL 에러 포멧
+```shell
+mysql > INSERT INTO user ....
+ERROR 1062 (23000): Duplicate entry 'abc...' for key 'PRIMARY'
+``` 
+
+* 3개 파트로 구성
+  * Error No
+  * SQLState
+  * Error Message
+
+#### Error No
+* 4자리 정수 -> 6자리 정수를 이용한 문자값도 추가
+* 에러 번호의 구분
+  * 1 ~ 999 : MySQL Global 에러
+  * 1000 ~ 1999 : MySQL Server 에러
+  * 2000 ~ 2999 : MySQL Client(or connector) 에러
+  * 3000 ~  : MySQL Server 에러
+  * MY-010000 ~ : MySQL Server 에러
+* 3500 이후 대역과 MY-010000 이후 대역
+  * MySQL 8.0 이후부터 사용
+* MySQL의 스토리지 엔진에 종속적인 경우가 많다
+
+#### SQLState
+* 5글자 영문 숫자로 구성
+* ANSI-SQL에서 제정한 Vendor 비 의존적 에러 코드
+* SQL-STATE는 두 파트로 구분
+  * 앞 두글자: 상태값 분류
+    * 00 : 정상
+    * 01 : 경고
+    * 02 : 레코드 없음
+    * HY : ANSI-SQL에서 아직 표준 분류를 하지 않은 상태 ( 벤더 의존적 상태 값 )
+    * 나머지는 모두 에러
+  * 뒤 세 글자 : 주로 숫자 값이며, 각 분류별 상세 에러 코드 값
+
+#### Error Message
+* 사람이 인식할 수 있는 문자열
+* MySQL 서버 버전별로 다른 에러 메시지가 존재
+* 버전과 스토리지 엔진에 종속적인 경우 많음
+* 메시지를 에러 처리용으로 사용 비추
+
