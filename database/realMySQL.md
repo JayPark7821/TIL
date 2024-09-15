@@ -1117,7 +1117,7 @@ CREATE INDEX ix_hashed_id on users ((MD5(id)));
 * 공간 인덱스나 전문검색 인덱스는 지원하지 않음
 * Primary Key에 표현식은 포함 불가
 
-### Ep.08
+### Ep.09
 ### Error Handling
 #### MySQL 에러 구분
 * Global Error
@@ -1182,3 +1182,68 @@ ERROR 1062 (23000): Duplicate entry 'abc...' for key 'PRIMARY'
 * 버전과 스토리지 엔진에 종속적인 경우 많음
 * 메시지를 에러 처리용으로 사용 비추
 
+
+### Ep.10
+### Left Join 주의사항 & 튜닝
+#### 대표적으로 사용되는 JOIN 종류   
+![img_13.png](img_13.png)
+
+
+#### Left Join 예시 
+```sql
+CREATE TABLE user (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(50) NOT NULL,
+  ....
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE user_coupon(
+    user_id int NOT NULL,
+    coupon_id int NOT NULL,
+  ...
+    PRIMARY KEY (user_id, coupon_id)
+    KEY ix_coupon_id (coupon_id)
+);
+```
+
+* 전체 유저 목록을 조회하는데, 3번 쿠폰을 가진 유저들에 대해서는 쿠폰 사용 여부를 같이 조회하는 경우
+
+```sql
+SELECT u.id, u.name, uc.coupon_id, uc.use_yn
+FROM user u
+LEFT JOIN user_coupon uc ON u.id = uc.user_id AND uc.coupon_id = 3;
+```
+
+#### LEFT JOIN 예시
+| 테이블 명       | COUNT                                                                                       |
+|-------------|---------------------------------------------------------------------------------------------|
+| user        | 30,000 rows                                                                                 | 
+| user_coupon | 3,000 rows<br/> ( coupon_id = 1 : 1000)<br/>( coupon_id = 2 : 1000) <br/>( coupon_id = 3 : 1000) |
+
+```sql
+SELECT u.id, u.name, uc.coupon_id, uc.use_yn
+FROM user u
+LEFT JOIN user_coupon uc ON u.id = uc.user_id AND uc.coupon_id = 3;
+-> 30000 rows in set (0.04 sec)
+```
+
+```sql
+SELECT u.id, u.name, uc.coupon_id, uc.use_yn
+FROM user u
+LEFT JOIN user_coupon uc ON u.id = uc.user_id 
+WHERE uc.coupon_id = 3;
+-> 10000 rows in set (0.04 sec)
+```
+
+```sql
+EXPLAIN SELECT u.id, u.name, uc.coupon_id, uc.use_yn
+FROM user u
+LEFT JOIN user_coupon uc ON u.id = uc.user_id AND uc.coupon_id = 3;
+
++----+-------+--------+----------------------+-----------+---------+----------------+------+-------------+
+| id | table | type   | possible_keys        | key       | key_len | ref            | rows | Extra       |
++----+-------+--------+----------------------+-----------+---------+----------------+------+-------------+
+| 1  | u     | ALL    | PRIMARY              | NULL      | 4       | NULL           | 1000| NULL        |
+| 1  | uc    | eq_ref | PRIMARY,ix_coupon_id | PRIMARY   | 4       | test.uc.user_id| 1   | NULL        |
+```
