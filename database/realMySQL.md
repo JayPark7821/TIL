@@ -1244,6 +1244,52 @@ LEFT JOIN user_coupon uc ON u.id = uc.user_id AND uc.coupon_id = 3;
 +----+-------+--------+----------------------+-----------+---------+----------------+------+-------------+
 | id | table | type   | possible_keys        | key       | key_len | ref            | rows | Extra       |
 +----+-------+--------+----------------------+-----------+---------+----------------+------+-------------+
-| 1  | u     | ALL    | PRIMARY              | NULL      | 4       | NULL           | 1000| NULL        |
-| 1  | uc    | eq_ref | PRIMARY,ix_coupon_id | PRIMARY   | 4       | test.uc.user_id| 1   | NULL        |
+| 1  | u     | ALL    | PRIMARY              | NULL      | NULL    | NULL           | 29372| NULL        |
+| 1  | uc    | eq_ref | PRIMARY,ix_coupon_id | PRIMARY   | 8       | test.uc.id,const| 1    | NULL        |
 ```
+
+```sql
+EXPLAIN SELECT u.id, u.name, uc.coupon_id, uc.use_yn
+FROM user u
+LEFT JOIN user_coupon uc ON u.id = uc.user_id and uc.coupon_id = 3;
+
++----+-------+--------+----------------------+-----------+---------+----------------+------+-------------+
+| id | table | type   | possible_keys        | key       | key_len | ref            | rows | Extra       |
++----+-------+--------+----------------------+-----------+---------+----------------+------+-------------+
+| 1  | uc    | ref    | PRIMARY,ix_coupon_id | ix_couponid| 4       | const           | 1000 | NULL        |
+| 1  | u     | eq_ref | PRIMARY              | PRIMARY    | 4       | test.uc.user_id | 1    | NULL        |
+
+```
+
+* LEFT JOIN시 실제 기준이 되는 왼쪽에 위치한 드라이빙 테이블을 항상 먼저 읽는 반면 INNER JOIN은 JOIN에 참여하는 테이블들의 교잡합 데이터를 결과로 반환
+
+
+#### COUNT(*) with LEFT JOIN
+* LEFT JOIN을 하지 않아도 결과가 동일한 경우에는, 불필요한 LEFT JOIN은 제거해서 사용
+
+```sql
+SELECT COUNT(*)
+FROM user u
+LEFT JOIN user_coupon uc ON u.id = uc.user_id AND uc.coupon_id = 3;
+
++-----------+
+| COUNT(*)  |
++-----------+
+| 1000      |
+```
+
+```sql
+SELECT COUNT(*)
+FROM user u
+
++-----------+
+| COUNT(*)  |
++-----------+
+| 1000      |
+```
+
+
+#### LEFR JOIN 정리
+* LEFT JOIN을 사용하고자 한다면 Driven Table(Inner Table)컬럼의 조건 (조인 조건)은 반드시 ON절에 명시해서 사용(IS NULL 조건은 예외)
+* LEFT JOIN과 INNER JOIN은 결과 데이터 및 쿼리 처리 방식 등이 매우 다르므로, 필요에 맞게 올바르게 사용하는 것이 중요
+* LEFT JOIN쿼리에서 COUNT를 사용하는 경우 LEFT JOIN이 굳이 필요하지 않다면 JOIN은 제거 
