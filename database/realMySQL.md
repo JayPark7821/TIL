@@ -1315,3 +1315,34 @@ var re = pstmt.executeQuery();
   * Execution-plan은 캐시되지 않음, Parse-Tree만 캐시됨
   * 캐시된 Prepared Statement는 Connection내에서만 공유됨
 
+#### PreparedStatement의 비밀
+* MySQL의 Prepared Statement
+  * Client side PreparedStatement
+  * Server side PreparedStatement
+  * 모두 SQL-Injection은 막을 수 있음 ( PreparedStatement만 사용한다면 )
+* JDBC Server-side PreparedStatement는
+  * useServerPrepStmts=true 경우에만 작동
+  * useServerPrepStmts=false (기본값)
+  * ORM에서는 TRUE로 기본 설정되는 경우 많음
+
+#### PreparedStatement 실익
+* 케이스 1
+```java
+for(int idx = 0; idx<100; idx++){
+  PreparedSZtatement pstmt = conn.prepareStatement("SELECT ... WHERE id = ?");
+    pstmt.setInt(1, targetUserIds[idx]);
+    pstmt.executeQuery();
+    ...
+}
+```
+* 케이스 2
+```java
+PreparedStatement pstmt = conn.prepareStatement("SELECT ... WHERE id = ?");
+for(int idx = 0; idx<100; idx++){
+    pstmt.setInt(1, targetUserIds[idx]);
+    pstmt.executeQuery();
+    ...
+}
+```
+
+* 케이스 1번은 루프를 돌때마다 새로운 PreparedStatement를 생성 -> 매번 쿼리를 파싱해서 메모리에 케시함 하지만 재사용이 발생하지 않음
