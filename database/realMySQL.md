@@ -1293,3 +1293,25 @@ FROM user u
 * LEFT JOIN을 사용하고자 한다면 Driven Table(Inner Table)컬럼의 조건 (조인 조건)은 반드시 ON절에 명시해서 사용(IS NULL 조건은 예외)
 * LEFT JOIN과 INNER JOIN은 결과 데이터 및 쿼리 처리 방식 등이 매우 다르므로, 필요에 맞게 올바르게 사용하는 것이 중요
 * LEFT JOIN쿼리에서 COUNT를 사용하는 경우 LEFT JOIN이 굳이 필요하지 않다면 JOIN은 제거 
+
+
+
+### Ep.11
+### Prepared Statement 
+#### Prepared Statement??
+
+* Binding Query
+```java
+var pstmt = connection.prepareStatement("SELECT * FROM user WHERE id = ?");
+pstmt.setInt(1, 1234);
+var re = pstmt.executeQuery(); 
+```
+* 장점
+  * SQL Injection 방지
+  * 쿼리 파싱 비용 감소 (2번째 이후 실행)
+* 단점
+  * 메모리 사용량 증가
+  * 2번의 Network round-trip 필요 ( 첫번째 실헹 )
+  * Execution-plan은 캐시되지 않음, Parse-Tree만 캐시됨
+  * 캐시된 Prepared Statement는 Connection내에서만 공유됨
+
