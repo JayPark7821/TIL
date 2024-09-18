@@ -1346,3 +1346,30 @@ for(int idx = 0; idx<100; idx++){
 ```
 
 * 케이스 1번은 루프를 돌때마다 새로운 PreparedStatement를 생성 -> 매번 쿼리를 파싱해서 메모리에 케시함 하지만 재사용이 발생하지 않음
+
+#### PreparedStatement vs Connection pool
+* MySQL 서버의 PreparedStatment는 
+  * 하나의 Connection 내에서만 공유됨
+  * Re-parsing 비용 최소화
+    * 모든 PreparedStatement는 Connection 단위로 캐시되어야 함
+    * 전체 커넥션이 5000개이고, 필요한 쿼리 패턴이 100개인 경우
+      * 500,000개의 ps객체가 MySQL 서버에 저장되어야 함 (max_prepared_stmt_count=16382)
+* 쿼리의 복잡도에 따라서
+  * 매우 복잡하면 PreparedStatement가 도움
+  * 단순하면 PreparedStatement의 장점이 경감
+* 메모리 사용량 vs CPU 사용량
+  * AWS RDS는 매우 소규모 서버들 사용
+  * 일반적으로 메모리 적음
+  * 오히려 PreparedStatement의 parseTree를 캐시하는것 보다 innoDB Buffer Pool을 늘리는 것이 더 효율적일 수 있음
+
+
+<br>
+
+* MySQL 서버에서는
+  * server-side PreparedStatement가 부작용이 심한 경우 많음
+  * client-side PreparedStatement를 권장
+
+* Server-side PreparedStatement
+  * 예상하는 것처럼 성능을 크게 높여주진 않음
+  * 반면 메모리 꽤 많이 소비하게 됨(가끔 OOM 유발)
+  * Max_prepared_stmt_count 부족시, 쿼리 파싱 겸감 효과 떨어짐
