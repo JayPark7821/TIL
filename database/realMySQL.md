@@ -1373,3 +1373,76 @@ for(int idx = 0; idx<100; idx++){
   * 예상하는 것처럼 성능을 크게 높여주진 않음
   * 반면 메모리 꽤 많이 소비하게 됨(가끔 OOM 유발)
   * Max_prepared_stmt_count 부족시, 쿼리 파싱 겸감 효과 떨어짐
+
+
+### Ep.12
+### SQL 문장의 가독성 향상
+#### 가독성의 중요성
+* 작성 의도를 보다 쉽게 이해할 수 있음
+* 커뮤니케이션 비용 감소, 업무 효율 향상
+* 문제 원인을 빠르게 찾을 수 있으며, 실수 감소
+* 유지보수에도 용이
+
+#### DISTINCT를 함수처럼 사용하는 형태 지양
+* DISTINCT는 함수가 아니며 괄호와 함께 사용한다고 하더라도 그렇지 않은 경우와 결과가 동일함
+* 괄호 사용시 오해의 여지가 있으므로 괄호 없는 형태로 사용하는 것을 권고
+
+```sql
+SELECT DISTINCT (col1), col2 
+FROM tab;
+
+```
+```sql
+SELECT DISTINCT col1, col2 
+FROM tab;
+```
+
+#### LEFT JOIN 사용 방법 준수
+* LEFT JOIN 사용시 드리븐 테이블 (조인 대상 테이블)에 대한 조건을 WHERE 정에 명시하는 경우 INNER JOIN을 사용한 것과 동일한 결과가 출력됨
+* LEFT JOIN 사용 시에는 드리븐 테이블에 대한 조건은 ON절에 명시
+* LEFT JOIN은 필요한 경우에만 사용
+  * 1:1 관계로 LEFT JOIN하면서 드라이빙 테이블에 속해있는 컬럼들만 SELECT 하거나, COUNT 쿼리를 실행하는 경우 등에서 LEFT JOIN 제거
+
+#### ORDER BY절 없이 LIMIT n,m 문법 사용 지양
+* 쿼리에서 ORDER BY절 없이 LIMIT이 사용되는 경우 어떤 의도로 작성된 건지 파악 어려움
+* 불필요한 LIMIT이라면 제거하거나, 만약 페이지네이션 처리를 위한 것이라면 반드시 ORDER BY 절을 명시해서 사용
+
+#### FULL GROUP BY 형태로 사용
+* SELECT .... GROUP BY 쿼리에서 GROUP BY절에 명시되지 안흔 컬럼을 SELECT 절에서 참조하는 경우 의도에 맞게 집계 함수를 반드시 사용, 또는 불필요한 컬럼인 경우에는 제거 
+* ANY_VALUE()를 사용해서 랜덤값을 가져올 수도 있음
+```sql
+# X
+SELECT col1, col2, COUNT(*)
+FROM tab
+GROUP BY col1;
+```
+```sql
+# O
+SELECT col1, SUM(col2), COUNT(*)
+FROM tab
+GROUP BY col1;
+```
+
+#### AND/OR 조건 함께 사용 시 반드시 괄호 명시
+* SQL 에서 AND 연산자는 OR 연산자보다 우선 순위가 높아서, 괄호가 없는 경우 AND연산자를 우선해서 처리
+
+```sql
+SELECT 1 OR 0 AND 0;
+=> 1
+```
+```sql
+SELECT (1 OR 0) AND 0;
+=> 0
+```
+```sql
+SELECT 1 OR (0 AND 0);
+=> 1
+```
+* 가독성을 위해 AND/OR 조건을 쿼리에서 함꼐 사용하는 경우, 의도에 맞게 괄호를 반드시 명시해서 사용
+
+#### 데이터 건수 조회는 COUNT(*) 사용
+* 아래와 같은 형태는 모두 동일한 데이터 건수를 반환하게 됨
+  * COUNT(*), COUNT(1), SUM(1)
+  * COUNT(PK_COL), COUNT(NOT_NULL_COL)
+* COUNT 함수의 인자로 특정 컬럼이나 1과 같은 상수값을 사용하는 경우, 쿼리의 가독성이 떨어지고 작성자의 의도를 명확하게 알기 어려움
+* 전체 건수가 필요한 경우, COUNT(*)를 사용하는 것을 권장
