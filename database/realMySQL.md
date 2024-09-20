@@ -1446,3 +1446,37 @@ SELECT 1 OR (0 AND 0);
   * COUNT(PK_COL), COUNT(NOT_NULL_COL)
 * COUNT 함수의 인자로 특정 컬럼이나 1과 같은 상수값을 사용하는 경우, 쿼리의 가독성이 떨어지고 작성자의 의도를 명확하게 알기 어려움
 * 전체 건수가 필요한 경우, COUNT(*)를 사용하는 것을 권장
+
+
+
+### Ep.13
+### 콜레이션
+#### 콜레이션(Collation)이란?
+* 문자를 비교하거나 정렬할 떄 사용됭는 규칙
+* 문자집합(Character Set)에 종속적
+  * 문자와 코드값(코드 포인트)의 조합이 정의돼있는 것이 문자 집합
+    * ex) "ㅁ=ㅕ+0041","ㅠ=ㅕ+0042","a=U+0061", "b=U+0062"
+* MySQL에서 모든 문자열 타입 컬럼은 독립적인 문자집합과 콜레이션을 가질 수 있음
+* 사용자가 특별히 지정하지 않는 경우, 서버에서 설정된 문자집합의 디폴트 콜레이션으로 자동 설정
+* "SHOW COLLATION" 명령으로 사용 가능한 콜레이션 목록 확인 가능
+
+#### 콜레이션의 종류
+* MySQL에서의 콜레이션 네이밍 컨벤션 
+* 문자집합_언어종속_UCA버전_민감도
+* 문자집합
+  * utf8, utf8mb4, latin1, euckr, cp1251, cp1256, ...
+* 언어종속
+  * 특정 언어에 대해 해당 언어에서 정의한 정렬 순서에 의해 정렬 및 비교를 수행 (다른 언어들에는 적용되지 않음)
+  * locale code(ex "tr") 또는 language(ex "turkish")로 표현
+    * utf8mb4_tr_0900_ai_ci 
+* Unicode Collation Algorithm Version
+  * utf8mb4_0900_ai_ci -> UCA 9.0.0
+  * utf8mb4_unicode_520_ci -> UCA 5.2.0
+  * utf8mb4_general_ci -> 커스텀 콜레이션
+* 민감도
+  * _ai = Accent Insensitive
+  * _as = Accent Sensitive
+  * _ci = Case Insensitive
+  * _cs = Case Sensitive
+  * _bin = Binary Collation
+  * _ks = Kana Sensitive
