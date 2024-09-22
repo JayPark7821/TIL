@@ -1480,3 +1480,24 @@ SELECT 1 OR (0 AND 0);
   * _cs = Case Sensitive
   * _bin = Binary Collation
   * _ks = Kana Sensitive
+
+#### 콜레이션 동작 방식
+* 유니코드 기준
+  * 데이터 저장
+    * 코드 포인트 값을 인코딩해서 저장
+    * (예시) 일반적으로 많이 사용되는 UTF-8 인코딩 방식  
+    
+![img_14.png](img_14.png)
+
+  * 데이터 비교
+    * DUCET( Default Unicode Collation Element Table)에 정의된 가중치 값을 바탕으로 비교
+    * 가중치 값은 [Primary.Secondary.Tertiary]와 같이 단계적으로 구성됨 
+      * `3131; [.3BF5.0020.0004] # HANGUL LETTER KIYEOK`  
+![img_15.png](img_15.png)
+    * 콜레이션에 따라 사용되는 가중치 값이 달라짐
+      * ai_ci는 1단계 가중치값(Primary Weight)까지
+      * as_ci는 2단계 가중치값(Secodary Weight)까지
+      * as_cs는 3단계 가중치값(Tertiary Weight)까지 사용
+    * 한글 음절(e.g 가)의 경우 분해(Decompose)해서 가중치 값을 조합한 후 비교
+    * WEIGHT_STRING() 함수를 통해 문자열의 가중치 값 확인 가능
+    * 
